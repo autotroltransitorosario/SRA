@@ -334,7 +334,7 @@ const CFG = {
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'AKfycbzMP0lTF-2N3r2ZKujF6dFjnL8iiMCFTllr6uSMHXfow3TkyuW4DGJpU-5wQoCt5hnL',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -841,28 +841,40 @@ function addRowHTML(){
 }
 /* URL de la Web App: la de CFG.API_URL o, si está vacía, la que se cargó desde el formulario (queda guardada en este dispositivo) */
 const AKEY='sra_api';
+/* Acepta https://script.google.com/macros/s/<ID>/exec y la variante de Workspace https://script.google.com/a/macros/<dominio>/s/<ID>/exec */
+const API_RE=/^https:\/\/script\.google\.com\/(?:macros\/s\/[\w-]+|a\/macros\/[\w.-]+\/s\/[\w-]+)\/exec$/;
 function apiUrl(){
-  if(CFG.API_URL) return CFG.API_URL;
-  try{ return localStorage.getItem(AKEY)||''; }catch(e){ return ''; }
+  const c=String(CFG.API_URL||'').trim();
+  if(API_RE.test(c)) return c;
+  try{ const s=String(localStorage.getItem(AKEY)||'').trim(); if(API_RE.test(s)) return s; }catch(e){}
+  return '';
 }
 function setApiUrl(){
   const cur=apiUrl();
   const v=(window.prompt('Pegá la URL de la Web App de Apps Script (termina en /exec):',cur)||'').trim();
   if(!v) return false;
-  if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v)){
-    formMsg('La URL no es válida. Debe ser https://script.google.com/macros/s/…/exec',true); return false;
+  if(!API_RE.test(v)){
+    formMsg('La URL no es válida. Debe empezar con https://script.google.com/ y terminar en /exec',true); return false;
   }
   try{ localStorage.setItem(AKEY,v); }catch(e){ formMsg('Este navegador no permite guardar la URL.',true); return false; }
   $('btnApi').hidden=!!CFG.API_URL; formMsg('URL guardada en este dispositivo.'); return true;
 }
 async function api(payload){
-  if(!apiUrl()) throw new Error('Falta la URL de la Web App de Apps Script. Tocá «⚙ Configurar URL» para cargarla.');
+  if(!apiUrl()){
+    const c=String(CFG.API_URL||'').trim();
+    throw new Error(c
+      ? 'La URL de API_URL en index.html no es una URL de Apps Script válida («'+c.slice(0,70)+(c.length>70?'…':'')+'»). Debe empezar con https://script.google.com/ y terminar en /exec. Corregila en el archivo o dejala vacía y usá «⚙ Configurar URL».'
+      : 'Falta la URL de la Web App de Apps Script. Tocá «⚙ Configurar URL» para cargarla.');
+  }
   if(!PASS) throw new Error('NEED_PASS');
   let r;
   try{
     r=await fetch(apiUrl(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({user:session.name,pass:PASS},payload))});
-  }catch(e){ throw new Error('Sin conexión con el servidor. Reintentá cuando tengas red.'); }
+  }catch(e){ throw new Error('No se pudo conectar con Apps Script. Si tenés internet, casi seguro la implementación no está en «Quién tiene acceso: Cualquier persona» (si pide iniciar sesión en Google, el navegador bloquea la respuesta).'); }
   const txt=await r.text(); let j;
+  let host=''; try{ host=new URL(r.url).host; }catch(e){}
+  if(/accounts\.google\.com/i.test(host)) throw new Error('La Web App está pidiendo iniciar sesión en Google. En Apps Script: Implementar → Administrar implementaciones → ✏️ Editar → «Quién tiene acceso: Cualquier persona» → Versión: Nueva versión → Implementar.');
+  if(host && !/google/i.test(host)) throw new Error('La dirección configurada responde desde «'+host+'», que no es Apps Script. Revisá que la URL sea la de la Web App (https://script.google.com/…/exec).');
   try{ j=JSON.parse(txt); }catch(e){
     const hint=txt.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,140);
     throw new Error('El servidor no devolvió datos válidos (HTTP '+r.status+')'+(hint?': «'+hint+'»':'')+'. Revisá la implementación de Apps Script: acceso "Cualquier persona", URL terminada en /exec y permisos autorizados.');
