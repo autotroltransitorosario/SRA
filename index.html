@@ -308,6 +308,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     </div>
     <div class="modal-foot">
       <span class="msg" id="formMsg"></span>
+      <button type="button" class="btn-sec" id="btnApi" title="Cargar la URL de la Web App de Apps Script">⚙ Configurar URL</button>
       <button type="button" class="btn-sec" id="formCancel">Cancelar</button>
       <button type="submit" class="btn-primary" id="formSave">Guardar reclamo</button>
     </div>
@@ -333,7 +334,7 @@ const CFG = {
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'AKfycbwd7zb49UdpTZK8lkKOukwMkgQBhpaCj2xOK3Xvp63QGiAgnfPafwvDwS8oMyR3Q-Tt',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -838,12 +839,28 @@ function addRowHTML(){
   if(!session||!session.write) return '';
   return `<tr class="addrow"><td colspan="${COLS.length}"><button type="button" class="btn-add" title="Nuevo reclamo" aria-label="Nuevo reclamo">+</button><span class="hint">Nuevo reclamo</span></td></tr>`;
 }
+/* URL de la Web App: la de CFG.API_URL o, si está vacía, la que se cargó desde el formulario (queda guardada en este dispositivo) */
+const AKEY='sra_api';
+function apiUrl(){
+  if(CFG.API_URL) return CFG.API_URL;
+  try{ return localStorage.getItem(AKEY)||''; }catch(e){ return ''; }
+}
+function setApiUrl(){
+  const cur=apiUrl();
+  const v=(window.prompt('Pegá la URL de la Web App de Apps Script (termina en /exec):',cur)||'').trim();
+  if(!v) return false;
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v)){
+    formMsg('La URL no es válida. Debe ser https://script.google.com/macros/s/…/exec',true); return false;
+  }
+  try{ localStorage.setItem(AKEY,v); }catch(e){ formMsg('Este navegador no permite guardar la URL.',true); return false; }
+  $('btnApi').hidden=!!CFG.API_URL; formMsg('URL guardada en este dispositivo.'); return true;
+}
 async function api(payload){
-  if(!CFG.API_URL) throw new Error('Falta configurar CFG.API_URL (URL de la Web App de Apps Script).');
+  if(!apiUrl()) throw new Error('Falta la URL de la Web App de Apps Script. Tocá «⚙ Configurar URL» para cargarla.');
   if(!PASS) throw new Error('NEED_PASS');
   let r;
   try{
-    r=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({user:session.name,pass:PASS},payload))});
+    r=await fetch(apiUrl(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({user:session.name,pass:PASS},payload))});
   }catch(e){ throw new Error('Sin conexión con el servidor. Reintentá cuando tengas red.'); }
   const txt=await r.text(); let j;
   try{ j=JSON.parse(txt); }catch(e){
@@ -911,13 +928,13 @@ async function loadLists(){
     if(res.lists) L=res.lists; else errs.push(res.err);
   }catch(e){ errs.push('No pude leer la hoja Config ('+e.message+').'); }
   // 2) respaldo: pedírselas al backend de Apps Script
-  if(!hasLists(L)&&CFG.API_URL&&PASS){
+  if(!hasLists(L)&&apiUrl()&&PASS){
     try{ L=(await api({action:'config'})).lists; }catch(e){ errs.push(e.message); }
   }
   if(hasLists(L)){
     applyLists(L);
     try{ localStorage.setItem(LKEY,JSON.stringify({ts:Date.now(),lists:L})); }catch(e){}
-    if(!CFG.API_URL) formMsg('Listas cargadas. Falta configurar CFG.API_URL para poder guardar el reclamo.',true);
+    if(!apiUrl()) formMsg('Listas cargadas. Falta la URL de Apps Script para poder guardar: tocá «⚙ Configurar URL».',true);
     else if(!PASS) formMsg('Listas cargadas. Cerrá sesión y volvé a ingresar para poder guardar el reclamo.',true);
     else formMsg('');
   }else{
@@ -928,7 +945,7 @@ function openForm(){
   if(!session||!session.write) return;
   $('altaForm').reset(); clearPhoto(); formMsg('Cargando listas…');
   FORM.reqId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('r'+Date.now()+Math.random().toString(16).slice(2));
-  $('fFechaInfo').value=nowInfo();
+  $('fFechaInfo').value=nowInfo(); $('btnApi').hidden=!!CFG.API_URL;
   $('formModal').hidden=false; document.body.style.overflow='hidden';
   applyLists(FORM.lists||{estado:[],tipo:[],subtipo:[],origen:[]});
   loadLists();
@@ -963,6 +980,7 @@ async function onPhoto(ev){
     $('photoName').textContent=`Foto lista · ${p.kb} KB`; formMsg('');
   }catch(e){ clearPhoto(); formMsg(e.message,true); }
 }
+$('btnApi').addEventListener('click',()=>{ if(setApiUrl()&&!FORM.lists) loadLists(); });
 $('btnCam').addEventListener('click',()=>$('inCam').click());
 $('btnGal').addEventListener('click',()=>$('inGal').click());
 $('inCam').addEventListener('change',onPhoto); $('inGal').addEventListener('change',onPhoto);
