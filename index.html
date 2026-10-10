@@ -631,20 +631,39 @@ function parseDocs(str){
     return {label:isRef?'Documento':t,id};
   });
 }
+/* Documentos propios del reclamo (columna Documento de la hoja Reclamos; si es solo un contador numérico se ignora) */
+function claimDocs(x){
+  const out=[];
+  ['Documento','Documentos'].forEach(c=>{
+    const v=String((x.r||{})[c]??'').trim();
+    if(v && !/^\d+$/.test(v)) out.push(...parseDocs(v));
+  });
+  return out;
+}
+/* Todos los documentos de la solicitud: los del reclamo + los de sus eventos (sin repetidos) */
 function galleryOfRow(x){
   const seen=new Set(), out=[];
-  x.eventos.forEach(e=>parseDocs(e['Documento']).forEach(d=>{ const k=d.id||('n:'+d.label); if(!seen.has(k)){ seen.add(k); out.push(d); } }));
+  const add=d=>{ const k=d.id||('n:'+d.label); if(!seen.has(k)){ seen.add(k); out.push(d); } };
+  claimDocs(x).forEach(add);
+  x.eventos.forEach(e=>parseDocs(e['Documento']).forEach(add));
   return out;
 }
 function galleryDocs(g){
   const p=String(g).split(':');
   const x=ROWS.find(r=>r.key===p[1]); if(!x) return [];
   if(p[0]==='r') return galleryOfRow(x);
+  if(p[0]==='c') return claimDocs(x);
   const e=x.eventos[+p[2]]; return e?parseDocs(e['Documento']):[];
 }
 const thumbUrl=(id,w)=>`https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w${w}`;
+/* Si Drive rechaza la primera ruta, se prueban otras dos antes de marcar la miniatura como no disponible */
+function thumbFail(img){
+  const id=encodeURIComponent(img.dataset.id), step=(+img.dataset.step||0)+1; img.dataset.step=step;
+  const alts=[`https://lh3.googleusercontent.com/d/${id}=w120`,`https://drive.google.com/uc?export=view&id=${id}`];
+  if(step<=alts.length) img.src=alts[step-1]; else img.classList.add('bad');
+}
 function thumbOne(d,g,i){
-  if(d.id) return `<img class="thumb" loading="lazy" src="${thumbUrl(d.id,120)}" alt="${esc(d.label)}" title="${esc(d.label)}" data-g="${esc(g)}" data-i="${i}" onerror="this.classList.add('bad')">`;
+  if(d.id) return `<img class="thumb" loading="lazy" src="${thumbUrl(d.id,120)}" alt="${esc(d.label)}" title="${esc(d.label)}" data-g="${esc(g)}" data-i="${i}" data-id="${esc(d.id)}" onerror="thumbFail(this)">`;
   const why = DRIVE.err==='no-key' ? 'falta DRIVE_API_KEY para ubicar el archivo por nombre' : 'archivo no encontrado en la carpeta de Drive';
   return `<div class="thumb-empty" title="${esc(d.label)} — ${esc(why)}">📎</div>`;
 }
@@ -663,8 +682,14 @@ function openFromThumb(el){
 function showLB(){
   const d=LB.docs[LB.i], n=LB.docs.length;
   $('lb').hidden=false;
-  const img=$('lbImg'); img.onerror=()=>{ $('lbCap').innerHTML=esc(d.label)+' — no se pudo cargar. <a href="https://drive.google.com/file/d/'+encodeURIComponent(d.id)+'/view" target="_blank" rel="noopener">Abrir en Drive</a>'; };
-  img.alt=d.label; img.src=thumbUrl(d.id,1600);
+  const img=$('lbImg'), eid=encodeURIComponent(d.id); let step=0;
+  const srcs=[thumbUrl(d.id,1600),`https://lh3.googleusercontent.com/d/${eid}=w1600`,`https://drive.google.com/uc?export=view&id=${eid}`];
+  img.onerror=()=>{
+    step++;
+    if(step<srcs.length) img.src=srcs[step];
+    else $('lbCap').innerHTML=esc(d.label)+' — no se pudo cargar la imagen (verificá que el archivo esté compartido como "Cualquier persona con el enlace"). <a href="https://drive.google.com/file/d/'+eid+'/view" target="_blank" rel="noopener">Abrir en Drive</a>';
+  };
+  img.alt=d.label; img.src=srcs[0];
   $('lbCap').innerHTML=`${LB.i+1} / ${n} · ${esc(d.label)} · <a href="https://drive.google.com/file/d/${encodeURIComponent(d.id)}/view" target="_blank" rel="noopener">Abrir en Drive</a>`;
   $('lbP').hidden=$('lbN').hidden=n<2;
 }
