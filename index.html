@@ -328,12 +328,12 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
 const CFG = {
   RECLAMOS: { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '2104142061', name: 'Reclamos' },
   EVENTOS:  { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: null,         name: 'Evento Reclamo' },
-  CONFIG:   { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: null,         name: 'Config' },
+  CONFIG:   { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '561896473', name: 'Config' },
   USUARIOS: { id: '1HQpjqCY6NV5EOl4GXLKJ_ogM4WCSeRD8XEKiHHaclCQ', gid: '0',          name: 'Lista de Usuario' },
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'AKfycbwOKlQbR0SorkKymPNIuBOx4kM3BZjNiqIBKqi0AHca2e-BMx7B252CPnMy1n_d4579',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -869,30 +869,46 @@ function formMsg(t,err){ const m=$('formMsg'); m.textContent=t||''; m.className=
 function nowInfo(){ const d=new Date(); return `${d.getFullYear()} · ${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())} (al guardar)`; }
 const hasLists=L=>!!L&&['estado','tipo','subtipo','origen'].some(k=>(L[k]||[]).length>0);
 /* Busca en las primeras filas los encabezados Estado / Tipo / Subtipo / Origen de la hoja Config y arma las listas */
+const LIST_KEYS=['estado','tipo','subtipo','origen'];
+const LIST_ALIAS={estado:'estado',estados:'estado',tipo:'tipo',tipos:'tipo',subtipo:'subtipo',subtipos:'subtipo',origen:'origen',origenes:'origen'};
+/* Devuelve {lists} o {err}. Acepta dos formatos de la hoja Config:
+   A) una columna por lista, con encabezado Estado / Tipo / Subtipo / Origen (en cualquiera de las primeras 10 filas)
+   B) filas "Estado | valor1 | valor2 ..." (el nombre de la lista en una celda y sus valores a la derecha) */
 function parseConfigLists(rows){
-  const want=['estado','tipo','subtipo','origen'];
+  const key=c=>LIST_ALIAS[norm(c)]||'';
+  if(rows.slice(0,5).some(r=>r.some(c=>norm(c)==='nro. solicitud')))
+    return {err:'La pestaña leída es la de Reclamos/Eventos, no la de Config. Revisá el gid de CFG.CONFIG en index.html.'};
+  const add=(L,k,v)=>{ v=String(v??'').trim(); if(v&&!L[k].includes(v)) L[k].push(v); };
+  const empty=()=>({estado:[],tipo:[],subtipo:[],origen:[]});
+  // A) encabezados por columna
   for(let r=0;r<Math.min(rows.length,10);r++){
     const found={};
-    rows[r].forEach((c,j)=>{ const k=norm(c); if(want.includes(k)&&!(k in found)) found[k]=j; });
-    if(('tipo' in found)&&('subtipo' in found)&&Object.keys(found).length>=3){
-      const L={};
-      want.forEach(k=>{
-        const seen=new Set(), arr=[];
-        if(k in found) for(let i=r+1;i<rows.length;i++){ const v=String(rows[i][found[k]]??'').trim(); if(v&&!seen.has(v)){ seen.add(v); arr.push(v); } }
-        L[k]=arr;
-      });
-      return L;
+    rows[r].forEach((c,j)=>{ const k=key(c); if(k&&!(k in found)) found[k]=j; });
+    if(Object.keys(found).length>=2){
+      const L=empty();
+      LIST_KEYS.forEach(k=>{ if(k in found) for(let i=r+1;i<rows.length;i++) add(L,k,rows[i][found[k]]); });
+      if(hasLists(L)) return {lists:L};
     }
   }
-  return null;
+  // B) nombre de lista + valores en la misma fila
+  const L=empty();
+  rows.forEach(row=>{
+    const cells=row.map(c=>String(c??'').trim());
+    const j=cells.findIndex(c=>c);
+    if(j<0) return; const k=key(cells[j]); if(!k) return;
+    cells.slice(j+1).forEach(v=>add(L,k,v));
+  });
+  if(hasLists(L)) return {lists:L};
+  const seen=rows.slice(0,3).map(r=>r.map(c=>String(c??'').trim()).filter(Boolean).slice(0,8).join(' | ')).filter(Boolean).join(' // ').slice(0,220);
+  return {err:'La hoja Config no tiene encabezados Estado / Tipo / Subtipo / Origen.'+(seen?' Primeras filas leídas: «'+seen+'».':' La hoja leída está vacía.')};
 }
 async function loadLists(){
   try{ const c=JSON.parse(localStorage.getItem(LKEY)||'null'); if(c&&hasLists(c.lists)) applyLists(c.lists); }catch(e){}
   let L=null; const errs=[];
   // 1) lectura directa de la hoja Config (pública, igual que Reclamos y Evento Reclamo)
   try{
-    L=parseConfigLists(await fetchSheet(CFG.CONFIG,true));
-    if(!L) errs.push('En la hoja Config no encontré los encabezados Estado / Tipo / Subtipo / Origen.');
+    const res=parseConfigLists(await fetchSheet(CFG.CONFIG,true));
+    if(res.lists) L=res.lists; else errs.push(res.err);
   }catch(e){ errs.push('No pude leer la hoja Config ('+e.message+').'); }
   // 2) respaldo: pedírselas al backend de Apps Script
   if(!hasLists(L)&&CFG.API_URL&&PASS){
