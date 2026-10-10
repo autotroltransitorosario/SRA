@@ -334,7 +334,7 @@ const CFG = {
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -843,20 +843,27 @@ function addRowHTML(){
 const AKEY='sra_api';
 /* Acepta https://script.google.com/macros/s/<ID>/exec y la variante de Workspace https://script.google.com/a/macros/<dominio>/s/<ID>/exec */
 const API_RE=/^https:\/\/script\.google\.com\/(?:macros\/s\/[\w-]+|a\/macros\/[\w.-]+\/s\/[\w-]+)\/exec$/;
+/* Tolera lo que suele pegarse: la URL completa, la URL sin /exec, o solo el ID de la implementación (AKfy…) */
+function normApi(v){
+  v=String(v||'').trim().replace(/^["']|["']$/g,'');
+  if(/^AKfy[\w-]{20,}$/.test(v)) v='https://script.google.com/macros/s/'+v+'/exec';
+  else if(/^https:\/\/script\.google\.com\/macros\/s\/AKfy[\w-]+\/?$/.test(v)) v=v.replace(/\/?$/,'/exec');
+  return API_RE.test(v)?v:'';
+}
 function apiUrl(){
-  const c=String(CFG.API_URL||'').trim();
-  if(API_RE.test(c)) return c;
-  try{ const s=String(localStorage.getItem(AKEY)||'').trim(); if(API_RE.test(s)) return s; }catch(e){}
-  return '';
+  const c=normApi(CFG.API_URL);
+  if(c) return c;
+  try{ return normApi(localStorage.getItem(AKEY)); }catch(e){ return ''; }
 }
 function setApiUrl(){
   const cur=apiUrl();
   const v=(window.prompt('Pegá la URL de la Web App de Apps Script (termina en /exec):',cur)||'').trim();
   if(!v) return false;
-  if(!API_RE.test(v)){
+  const nv=normApi(v);
+  if(!nv){
     formMsg('La URL no es válida. Debe empezar con https://script.google.com/ y terminar en /exec',true); return false;
   }
-  try{ localStorage.setItem(AKEY,v); }catch(e){ formMsg('Este navegador no permite guardar la URL.',true); return false; }
+  try{ localStorage.setItem(AKEY,nv); }catch(e){ formMsg('Este navegador no permite guardar la URL.',true); return false; }
   $('btnApi').hidden=!!CFG.API_URL; formMsg('URL guardada en este dispositivo.'); return true;
 }
 async function api(payload){
