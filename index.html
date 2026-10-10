@@ -161,6 +161,35 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   .pl tr.d td{border-top:1px solid #000}
   .pl tr.gap td{border:0;height:5px;padding:0}
 }
+/* ---------- Alta de reclamo ---------- */
+tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8px 12px}
+.btn-add{width:34px;height:34px;border-radius:9px;border:0;background:var(--red);color:#fff;font-size:22px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-add:hover{background:var(--red-dark)}
+.addrow .hint{margin-left:12px;color:var(--text-muted);font-size:12px;vertical-align:middle}
+.modal{position:fixed;inset:0;background:rgba(10,15,26,.72);z-index:90;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+.modal-card{background:#fff;border-radius:14px;width:100%;max-width:720px;box-shadow:0 20px 50px rgba(0,0,0,.4);overflow:hidden}
+.modal-head{background:linear-gradient(180deg,var(--navy-900),var(--navy-950));border-bottom:3px solid var(--red);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.modal-head h2{margin:0;font-size:16px;letter-spacing:.06em}
+.modal-head button{background:rgba(255,255,255,.12);border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer}
+.modal-body{padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.modal-body .full{grid-column:1/-1}
+.fld label{display:block;font-size:11.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.fld label i{color:var(--red);font-style:normal}
+.fld input,.fld select,.fld textarea{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;color:var(--text);background:#fff}
+.fld textarea{min-height:74px;resize:vertical}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid var(--navy-700);border-color:var(--navy-700)}
+.fld input[readonly]{background:#f4f7fc;color:var(--text-muted)}
+.photo-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.photo-row button{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 13px;font-size:13px;cursor:pointer}
+.photo-row button:hover{border-color:var(--navy-700)}
+.photo-prev{width:64px;height:64px;border-radius:9px;object-fit:cover;border:1px solid var(--border)}
+.photo-name{font-size:12px;color:var(--text-muted);font-family:var(--mono);word-break:break-all;flex:1 1 200px}
+.modal-foot{padding:14px 18px;border-top:1px solid var(--border-soft);display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;background:#fbfcfe}
+.modal-foot .msg{margin-right:auto;font-size:13px;color:var(--text-muted)}
+.modal-foot .msg.err{color:var(--red)}
+.modal-foot .btn-primary{padding:11px 22px}
+.btn-sec{background:#fff;border:1px solid var(--border);border-radius:9px;padding:10px 16px;font-size:14px;cursor:pointer}
+@media (max-width:560px){.modal-body{grid-template-columns:1fr}}
 @media (max-width:720px){
   .topbar{padding:12px 14px}main{padding:14px 12px 30px}
   .brand h1{font-size:18px}.legend{display:none}
@@ -249,6 +278,41 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   <button class="nx" id="lbN" aria-label="Siguiente">›</button>
   <div class="cap" id="lbCap"></div>
 </div>
+<div class="modal" id="formModal" hidden role="dialog" aria-modal="true" aria-labelledby="formTitle">
+  <form class="modal-card" id="altaForm" autocomplete="off" novalidate>
+    <div class="modal-head"><h2 id="formTitle">NUEVO RECLAMO</h2><button type="button" id="formX" aria-label="Cerrar">✕</button></div>
+    <div class="modal-body">
+      <div class="fld"><label>Nro. solicitud</label><input type="text" value="Automático" readonly></div>
+      <div class="fld"><label>Año / Fecha de registro</label><input type="text" id="fFechaInfo" readonly></div>
+      <div class="fld"><label for="aEstado">Estado <i>*</i></label><select id="aEstado" required></select></div>
+      <div class="fld"><label for="aTipo">Tipo <i>*</i></label><select id="aTipo" required></select></div>
+      <div class="fld"><label for="aSubtipo">Subtipo <i>*</i></label><select id="aSubtipo" required></select></div>
+      <div class="fld"><label for="aOrigen">Origen <i>*</i></label><select id="aOrigen" required></select></div>
+      <div class="fld full"><label for="aDesc">Descripción <i>*</i></label><textarea id="aDesc" maxlength="2000" placeholder="Breve descripción del reclamo" required></textarea></div>
+      <div class="fld"><label for="aDir">Dirección <i>*</i></label><input id="aDir" type="text" maxlength="300" placeholder="Calle y altura" required></div>
+      <div class="fld"><label for="aDist">Distrito</label><input id="aDist" type="text" maxlength="100" list="distList" placeholder="Ej.: NORTE"><datalist id="distList"></datalist></div>
+      <div class="fld"><label for="aX">Coordenada X</label><input id="aX" type="text" inputmode="decimal" placeholder="Ej.: 5434082.335"></div>
+      <div class="fld"><label for="aY">Coordenada Y</label><input id="aY" type="text" inputmode="decimal" placeholder="Ej.: 6356003.941"></div>
+      <div class="fld full"><label for="aObs">Observaciones</label><textarea id="aObs" maxlength="2000"></textarea></div>
+      <div class="fld full"><label>Documento (foto)</label>
+        <div class="photo-row">
+          <button type="button" id="btnCam">📷 Tomar foto</button>
+          <button type="button" id="btnGal">🖼️ Elegir del dispositivo</button>
+          <button type="button" id="btnPhotoDel" hidden>✕ Quitar</button>
+          <img class="photo-prev" id="photoPrev" alt="" hidden>
+          <span class="photo-name" id="photoName">Sin foto · se guardará como Dirección_Fecha_Técnico</span>
+        </div>
+        <input type="file" id="inCam" accept="image/*" capture="environment" hidden>
+        <input type="file" id="inGal" accept="image/*" hidden>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="msg" id="formMsg"></span>
+      <button type="button" class="btn-sec" id="formCancel">Cancelar</button>
+      <button type="submit" class="btn-primary" id="formSave">Guardar reclamo</button>
+    </div>
+  </form>
+</div>
 <div id="printArea" aria-hidden="true"></div>
 <div class="toast" id="toast"></div>
 
@@ -267,6 +331,8 @@ const CFG = {
   USUARIOS: { id: '1HQpjqCY6NV5EOl4GXLKJ_ogM4WCSeRD8XEKiHHaclCQ', gid: '0',          name: 'Lista de Usuario' },
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
+  /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -333,7 +399,13 @@ async function fetchSheet(src){
 
 /* ------------------------- sesión / login ------------------------- */
 const SKEY='sra_session', CKEY='sra_cache';
-let session=null, attempts=0, lockUntil=0;
+let session=null, attempts=0, lockUntil=0, PASS='';
+try{ PASS=sessionStorage.getItem('sra_p')||''; }catch(e){}
+/* Permiso de escritura = columna "Escritura" (G) de la Lista de Usuario en "Habilitado" */
+function canWrite(u){
+  const k=Object.keys(u||{}).find(h=>norm(h)==='escritura');
+  return !!k && norm(u[k])==='habilitado';
+}
 
 function loadSession(){
   try{
@@ -364,8 +436,9 @@ $('loginForm').addEventListener('submit', async ev=>{
       err.textContent=res.err;
     } else {
       attempts=0;
-      session={name:res.user['Nombre'], rol:res.user['Rol']||'', ts:Date.now()};
+      session={name:res.user['Nombre'], rol:res.user['Rol']||'', ts:Date.now(), write:canWrite(res.user)};
       try{ localStorage.setItem(SKEY, JSON.stringify(session)); }catch(e){}
+      PASS=$('uPass').value; try{ sessionStorage.setItem('sra_p',PASS); }catch(e){}
       $('uPass').value='';
       enterApp();
     }
@@ -374,7 +447,7 @@ $('loginForm').addEventListener('submit', async ev=>{
   }finally{ btn.disabled=false; btn.textContent='Ingresar'; }
 });
 function logout(){
-  localStorage.removeItem(SKEY); session=null; clearInterval(timer);
+  localStorage.removeItem(SKEY); try{ sessionStorage.removeItem('sra_p'); }catch(e){} PASS=''; session=null; clearInterval(timer);
   $('app').hidden=true; $('login').hidden=false; $('uName').focus();
 }
 $('logoutBtn').addEventListener('click', logout);
@@ -384,7 +457,13 @@ async function revalidate(){
   try{
     const users=await fetchSheet(CFG.USUARIOS);
     const r=findUser(users, session.name);
-    if(r.err){ logout(); $('loginErr').textContent=r.err; }
+    if(r.err){ logout(); $('loginErr').textContent=r.err; return; }
+    const w=canWrite(r.user);
+    if(w!==!!session.write){            // el permiso cambió en la planilla
+      session.write=w;
+      try{ localStorage.setItem(SKEY, JSON.stringify(session)); }catch(e){}
+      render();
+    }
   }catch(e){ /* sin conexión: se mantiene la sesión */ }
 }
 
@@ -553,6 +632,8 @@ function detailHTML(x){
   if(r['Intervenciones']!==undefined&&r['Intervenciones']!=='') meta.push('Intervenciones: '+esc(r['Intervenciones']));
   if(r['Asignaciones']!==undefined&&r['Asignaciones']!=='') meta.push('Asignaciones: '+esc(r['Asignaciones']));
   if(meta.length) h+=`<p class="meta">${meta.join(' · ')}</p>`;
+  const cd=claimDocs(x);
+  if(cd.length) h+=`<h4>Documentos del reclamo</h4><div style="margin:0 0 14px">${thumbsHTML(cd,'c:'+x.key,8)}</div>`;
   h+=`<h4>Eventos (${x.eventos.length}) · orden ascendente</h4>`;
   if(!x.eventos.length) return h+'<p class="ev-empty">Sin eventos registrados para esta solicitud.</p>';
   h+='<table class="ev-table"><thead><tr><th>#</th><th>Estado</th><th>Última intervención</th><th>Técnico</th><th>Móvil</th><th>Descripción</th><th>Observaciones</th><th>Documento</th><th>Origen</th></tr></thead><tbody>';
@@ -571,7 +652,7 @@ function render(){
   const slice=rows.slice((state.page-1)*CFG.PAGE_SIZE, state.page*CFG.PAGE_SIZE);
   $('countPill').innerHTML=`<b>${rows.length}</b> reclamo${rows.length===1?'':'s'}`;
   $('empty').hidden=rows.length>0;
-  $('tbody').innerHTML=slice.map(x=>{
+  $('tbody').innerHTML=addRowHTML()+slice.map(x=>{
     const r=x.r, last=x.eventos[x.eventos.length-1], open=state.open.has(x.key);
     const main=`<tr class="main${open?' open':''}" data-k="${esc(x.key)}">
       <td class="nro"><span class="caret">▸</span>${esc(x.nro)}${x.orphan?' <span class="orphan">(sin reclamo)</span>':''}</td>
@@ -592,6 +673,7 @@ function render(){
   $('prevBtn').disabled=state.page<=1; $('nextBtn').disabled=state.page>=pages;
 }
 $('tbody').addEventListener('click',ev=>{
+  if(ev.target.closest('.btn-add')){ openForm(); return; }
   const th=ev.target.closest('[data-g]');
   if(th){ openFromThumb(th); return; }
   const tr=ev.target.closest('tr.main'); if(!tr) return;
@@ -749,6 +831,113 @@ function printList(){
   window.print();
 }
 $('printBtn').addEventListener('click',printList);
+
+/* ------------------------- alta de reclamo (solo usuarios con Escritura) ------------------------- */
+function addRowHTML(){
+  if(!session||!session.write) return '';
+  return `<tr class="addrow"><td colspan="${COLS.length}"><button type="button" class="btn-add" title="Nuevo reclamo" aria-label="Nuevo reclamo">+</button><span class="hint">Nuevo reclamo</span></td></tr>`;
+}
+async function api(payload){
+  if(!CFG.API_URL) throw new Error('Falta configurar CFG.API_URL (URL de la Web App de Apps Script).');
+  if(!PASS) throw new Error('NEED_PASS');
+  let r;
+  try{
+    r=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({user:session.name,pass:PASS},payload))});
+  }catch(e){ throw new Error('Sin conexión con el servidor. Reintentá cuando tengas red.'); }
+  let j; try{ j=await r.json(); }catch(e){ throw new Error('Respuesta inválida del servidor (¿la Web App está publicada para "Cualquier persona"?)'); }
+  if(!j.ok) throw new Error(j.error||'Error del servidor');
+  return j;
+}
+const FORM={photo:null,lists:null,busy:false,reqId:''};
+const LKEY='sra_lists';
+function fillOpts(id,arr){
+  const s=$(id), cur=s.value;
+  s.innerHTML='<option value="">— Seleccionar —</option>'+arr.map(v=>`<option>${esc(v)}</option>`).join('');
+  if(arr.includes(cur)) s.value=cur;
+}
+function applyLists(L){
+  FORM.lists=L;
+  fillOpts('aEstado',L.estado||[]); fillOpts('aTipo',L.tipo||[]); fillOpts('aSubtipo',L.subtipo||[]); fillOpts('aOrigen',L.origen||[]);
+  $('distList').innerHTML=uniq(ROWS.map(x=>x.r['Distrito'])).map(v=>`<option value="${esc(v)}">`).join('');
+}
+function formMsg(t,err){ const m=$('formMsg'); m.textContent=t||''; m.className='msg'+(err?' err':''); }
+function nowInfo(){ const d=new Date(); return `${d.getFullYear()} · ${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())} (al guardar)`; }
+async function loadLists(){
+  try{ const c=JSON.parse(localStorage.getItem(LKEY)||'null'); if(c&&c.lists) applyLists(c.lists); }catch(e){}
+  try{
+    const j=await api({action:'config'});
+    applyLists(j.lists);
+    try{ localStorage.setItem(LKEY,JSON.stringify({ts:Date.now(),lists:j.lists})); }catch(e){}
+    formMsg('');
+  }catch(e){
+    if(e.message==='NEED_PASS') formMsg('Cerrá sesión y volvé a ingresar para poder guardar reclamos.',true);
+    else formMsg(FORM.lists?('Usando listas guardadas. '+e.message):e.message,true);
+  }
+}
+function openForm(){
+  if(!session||!session.write) return;
+  $('altaForm').reset(); clearPhoto(); formMsg('Cargando listas…');
+  FORM.reqId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('r'+Date.now()+Math.random().toString(16).slice(2));
+  $('fFechaInfo').value=nowInfo();
+  $('formModal').hidden=false; document.body.style.overflow='hidden';
+  applyLists(FORM.lists||{estado:[],tipo:[],subtipo:[],origen:[]});
+  loadLists();
+}
+function closeForm(){ if(FORM.busy) return; $('formModal').hidden=true; document.body.style.overflow=''; }
+function clearPhoto(){
+  FORM.photo=null; $('photoPrev').hidden=true; $('photoPrev').removeAttribute('src'); $('btnPhotoDel').hidden=true;
+  $('photoName').textContent='Sin foto · se guardará como Dirección_Fecha_Técnico'; $('inCam').value=''; $('inGal').value='';
+}
+/* Reduce la foto (máx. 1600 px, JPEG) para que suba rápido desde el celular */
+function fileToJpeg(file,max,q){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{
+      const k=Math.min(1,max/Math.max(img.width,img.height)), w=Math.round(img.width*k), h=Math.round(img.height*k);
+      const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url);
+      c.toBlob(b=>{
+        if(!b) return rej(new Error('No se pudo procesar la imagen'));
+        const fr=new FileReader(); fr.onload=()=>res({dataUrl:fr.result,base64:String(fr.result).split(',')[1],kb:Math.round(b.size/1024)}); fr.onerror=()=>rej(new Error('No se pudo leer la imagen')); fr.readAsDataURL(b);
+      },'image/jpeg',q);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('El archivo no es una imagen válida')); };
+    img.src=url;
+  });
+}
+async function onPhoto(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  try{
+    formMsg('Procesando foto…');
+    const p=await fileToJpeg(f,1600,0.82);
+    FORM.photo=p; $('photoPrev').src=p.dataUrl; $('photoPrev').hidden=false; $('btnPhotoDel').hidden=false;
+    $('photoName').textContent=`Foto lista · ${p.kb} KB`; formMsg('');
+  }catch(e){ clearPhoto(); formMsg(e.message,true); }
+}
+$('btnCam').addEventListener('click',()=>$('inCam').click());
+$('btnGal').addEventListener('click',()=>$('inGal').click());
+$('inCam').addEventListener('change',onPhoto); $('inGal').addEventListener('change',onPhoto);
+$('btnPhotoDel').addEventListener('click',clearPhoto);
+$('formX').addEventListener('click',closeForm); $('formCancel').addEventListener('click',closeForm);
+$('formModal').addEventListener('mousedown',ev=>{ if(ev.target===$('formModal')) closeForm(); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('formModal').hidden) closeForm(); });
+
+$('altaForm').addEventListener('submit',async ev=>{
+  ev.preventDefault(); if(FORM.busy) return;
+  const v=id=>$(id).value.trim();
+  const req=[['aEstado','Estado'],['aTipo','Tipo'],['aSubtipo','Subtipo'],['aOrigen','Origen'],['aDesc','Descripción'],['aDir','Dirección']];
+  for(const [id,n] of req){ if(!v(id)){ formMsg('Completá el campo: '+n,true); $(id).focus(); return; } }
+  for(const id of ['aX','aY']){ if(v(id)&&isNaN(parseFloat(v(id).replace(',','.')))){ formMsg('Coordenada inválida',true); $(id).focus(); return; } }
+  FORM.busy=true; $('formSave').disabled=true; $('formSave').textContent='Guardando…'; formMsg(FORM.photo?'Subiendo foto y guardando…':'Guardando…');
+  try{
+    const j=await api({action:'alta',reqId:FORM.reqId,data:{
+      estado:v('aEstado'),tipo:v('aTipo'),subtipo:v('aSubtipo'),origen:v('aOrigen'),descripcion:v('aDesc'),direccion:v('aDir'),
+      distrito:v('aDist'),coordX:v('aX'),coordY:v('aY'),observaciones:v('aObs'),foto:FORM.photo?FORM.photo.base64:''}});
+    FORM.busy=false; closeForm(); toast('Reclamo '+j.nro+' guardado'); refresh(false);
+    setTimeout(()=>refresh(false),6000);   // la lectura pública de Sheets puede demorar unos segundos
+  }catch(e){
+    formMsg(e.message==='NEED_PASS'?'Cerrá sesión y volvé a ingresar para guardar reclamos.':e.message,true);
+  }finally{ FORM.busy=false; $('formSave').disabled=false; $('formSave').textContent='Guardar reclamo'; }
+});
 
 /* ------------------------- arranque ------------------------- */
 function enterApp(){
