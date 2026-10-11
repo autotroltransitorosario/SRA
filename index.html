@@ -70,6 +70,21 @@ main{padding:20px 28px 40px;max-width:1700px;margin:0 auto}
 .toolbar input[type=search]{flex:1 1 260px;min-width:200px}
 .toolbar .btn-clear{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;cursor:pointer;font-size:13px}
 .toolbar .btn-clear:hover{border-color:var(--navy-700)}
+.ms{position:relative}
+.ms-btn{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;cursor:pointer;font-size:13px;font-family:inherit;color:inherit;min-width:170px;text-align:left}
+.ms-btn::after{content:"▾";float:right;margin-left:8px;color:var(--text-muted)}
+.ms-btn:hover{border-color:var(--navy-700)}
+.ms-panel{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:210px;max-height:300px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 28px rgba(15,25,45,.22);padding:6px}
+.ms-panel label{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px}
+.ms-panel label:hover{background:#f1f4f9}
+.ms-panel .ms-acts{display:flex;gap:6px;padding:4px 6px 8px;border-bottom:1px solid var(--border-soft);margin-bottom:4px}
+.ms-panel .ms-acts button{flex:1;border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px;font-size:12px;cursor:pointer}
+.toolbar label.dt{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
+.toolbar label.dt input{border:1px solid var(--border);border-radius:9px;padding:8px 9px;font:inherit;font-size:13px;color:var(--text)}
+.modal-card.mapcard{max-width:1100px}
+#mapBox{height:min(70vh,640px);width:100%;background:#e9eef5}
+.map-lbl{background:#fff;border:1px solid var(--navy-700);border-radius:6px;padding:2px 6px;font:600 11px/1.3 Arial,sans-serif;color:#122036;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.map-lbl::before{display:none}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--text-muted);margin:0 0 10px;flex-wrap:wrap}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:baseline}
 
@@ -148,9 +163,14 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   #printArea{display:block;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:9pt}
   .ph{width:100%;border-collapse:collapse;margin-bottom:6px;min-width:0}
   .ph td{border:0;padding:0;vertical-align:top}
-  .ph .l{width:34%;font-weight:700;font-size:11pt;line-height:1.4}
+  .ph .l{width:30%;font-weight:700;font-size:11pt;line-height:1.4}
   .ph .c{font-size:11pt;line-height:1.4;padding-top:8px}
-  .ph .r{text-align:right;font-weight:700;font-size:11pt;padding-top:14px;width:18%}
+  .ph .r{text-align:right;font-weight:700;font-size:11pt;width:28%}
+  .ph .r .dist{display:block;font-size:16pt;line-height:1.15;margin-bottom:4px}
+  .asg{width:100%;border-collapse:collapse;margin:0 0 8px;table-layout:fixed}
+  .asg td{border:2px solid #000;background:#e6e6e6;padding:5px 8px;vertical-align:top;font-size:10pt;word-break:break-word;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .asg b{display:block;font-size:8pt;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+  .asg span{font-weight:700;font-size:12pt}
   .pl{width:100%;min-width:0;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}
   .pl thead{display:table-header-group}
   .pl th{position:static;background:#fff;color:#000;text-transform:none;letter-spacing:0;cursor:default;border:1px solid #000;border-bottom:2px solid #000;padding:4px 3px;text-align:center;font-weight:700;font-size:9pt}
@@ -252,12 +272,16 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     <div class="toolbar">
       <input type="search" id="q" placeholder="Buscar N.º, dirección, descripción, técnico…">
       <select id="fTipo"><option value="">Tipo (todos)</option></select>
-      <select id="fEstado"><option value="">Estado reclamo (todos)</option></select>
-      <select id="fEvento"><option value="">Estado evento (todos)</option></select>
+      <div class="ms" id="msEstado">
+        <button type="button" class="ms-btn" id="msBtn" aria-haspopup="true" aria-expanded="false">Estado reclamo</button>
+        <div class="ms-panel" id="msPanel" hidden></div>
+      </div>
       <select id="fDistrito"><option value="">Distrito (todos)</option></select>
-      <select id="fUltimo"><option value="">Último evento (todos)</option></select>
-      <button class="btn-clear" id="clearBtn">✕ Limpiar</button>
+      <label class="dt">Desde <input type="date" id="fDesde"></label>
+      <label class="dt">Hasta <input type="date" id="fHasta"></label>
+      <button class="btn-clear" id="clearBtn" title="Quita los filtros y colapsa los reclamos desplegados">✕ Limpiar</button>
       <button class="btn-print" id="printBtn" title="Imprimir o guardar en PDF la lista filtrada">🖨️ Imprimir PDF</button>
+      <button class="btn-print btn-map" id="mapBtn" title="Ver en el mapa los reclamos filtrados que tienen coordenadas">🗺️ Ver en mapa</button>
     </div>
     <p class="legend">
       <span><i class="dot" style="background:var(--green)"></i>Cerrado / resuelto</span>
@@ -282,6 +306,13 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     </div>
   </main>
   <footer>SRA · Datos en línea desde Google Sheets · Actualización automática cada minuto</footer>
+</div>
+<div class="modal" id="mapModal" hidden role="dialog" aria-modal="true" aria-labelledby="mapTitle">
+  <div class="modal-card mapcard">
+    <div class="modal-head"><h2 id="mapTitle">RECLAMOS EN EL MAPA</h2><button type="button" id="mapX" aria-label="Cerrar">✕</button></div>
+    <div id="mapBox"></div>
+    <div class="modal-foot"><span class="msg" id="mapMsg"></span></div>
+  </div>
 </div>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Imagen del documento">
   <button class="x" id="lbX" aria-label="Cerrar">✕</button>
@@ -390,7 +421,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -527,7 +558,8 @@ async function revalidate(){
 
 /* ------------------------- datos ------------------------- */
 let RECLAMOS=[], EVENTOS=[], ROWS=[], timer=null, loading=false;
-let state={ q:'', tipo:'', estado:'', evento:'', distrito:'', ultimo:'', sortCol:'nro', sortDir:1, page:1, open:new Set() };
+let state={ q:'', tipo:'', estados:new Set(), distrito:'', desde:'', hasta:'', sortCol:'nro', sortDir:1, page:1, open:new Set() };
+let estadosInit=false;   // la primera carga deja marcados solo los estados "Cerrado"
 
 const keyOf = v => { const d=String(v??'').replace(/\D/g,'').replace(/^0+/,''); return d; };
 
@@ -597,22 +629,52 @@ function fillSelect(id, label, values){
 }
 function fillFilters(){
   fillSelect('fTipo','Tipo',uniq(ROWS.map(x=>x.r['Tipo'])));
-  fillSelect('fEstado','Estado reclamo',uniq(ROWS.map(x=>x.r['Estado'])));
-  fillSelect('fEvento','Estado evento',uniq(EVENTOS.map(e=>e['Estado'])));
   fillSelect('fDistrito','Distrito',uniq(ROWS.map(x=>x.r['Distrito'])));
-  const ult=ROWS.map(x=>{ const l=x.eventos[x.eventos.length-1]; return l?l['Estado']:''; });
-  fillSelect('fUltimo','Último evento',[...uniq(ult),'(Sin eventos)']);
+  const est=uniq(ROWS.map(x=>x.r['Estado']));
+  if(!estadosInit){            // al ingresar: solo los estados cerrados (si no hay ninguno, sin filtro)
+    estadosInit=true;
+    est.filter(e=>CLOSED_RE.test(norm(e))).forEach(e=>state.estados.add(e));
+  }
+  [...state.estados].forEach(e=>{ if(!est.includes(e)) state.estados.delete(e); });
+  $('msPanel').dataset.opts=JSON.stringify(est);
+  buildEstadoPanel();
 }
-['q','fTipo','fEstado','fEvento','fDistrito','fUltimo'].forEach(id=>{
+function buildEstadoPanel(){
+  const est=JSON.parse($('msPanel').dataset.opts||'[]');
+  $('msPanel').innerHTML=`<div class="ms-acts"><button type="button" data-a="all">Todos</button><button type="button" data-a="none">Ninguno</button></div>`+
+    est.map((e,i)=>`<label><input type="checkbox" data-i="${i}" ${state.estados.has(e)?'checked':''}> ${esc(e)}</label>`).join('');
+  updateEstadoBtn(est);
+}
+function updateEstadoBtn(est){
+  est=est||JSON.parse($('msPanel').dataset.opts||'[]');
+  const n=state.estados.size;
+  $('msBtn').textContent=n===0||n===est.length?'Estado reclamo (todos)':(n===1?'Estado: '+[...state.estados][0]:`Estado reclamo (${n})`);
+}
+$('msBtn').addEventListener('click',e=>{ e.stopPropagation(); const p=$('msPanel'); p.hidden=!p.hidden; $('msBtn').setAttribute('aria-expanded',String(!p.hidden)); });
+$('msPanel').addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>{ $('msPanel').hidden=true; $('msBtn').setAttribute('aria-expanded','false'); });
+$('msPanel').addEventListener('change',e=>{
+  const est=JSON.parse($('msPanel').dataset.opts||'[]'), i=e.target.dataset.i; if(i===undefined) return;
+  e.target.checked?state.estados.add(est[+i]):state.estados.delete(est[+i]);
+  updateEstadoBtn(est); state.page=1; render();
+});
+$('msPanel').addEventListener('click',e=>{
+  const a=e.target.dataset&&e.target.dataset.a; if(!a) return;
+  const est=JSON.parse($('msPanel').dataset.opts||'[]');
+  state.estados=new Set(a==='all'?est:[]); buildEstadoPanel(); state.page=1; render();
+});
+['q','fTipo','fDistrito','fDesde','fHasta'].forEach(id=>{
   $(id).addEventListener(id==='q'?'input':'change',()=>{
-    state.q=$('q').value; state.tipo=$('fTipo').value; state.estado=$('fEstado').value;
-    state.evento=$('fEvento').value; state.distrito=$('fDistrito').value; state.ultimo=$('fUltimo').value;
+    state.q=$('q').value; state.tipo=$('fTipo').value; state.distrito=$('fDistrito').value;
+    state.desde=$('fDesde').value; state.hasta=$('fHasta').value;
     state.page=1; render();
   });
 });
 $('clearBtn').addEventListener('click',()=>{
-  ['q','fTipo','fEstado','fEvento','fDistrito','fUltimo'].forEach(i=>$(i).value='');
-  Object.assign(state,{q:'',tipo:'',estado:'',evento:'',distrito:'',ultimo:'',page:1}); render();
+  ['q','fTipo','fDistrito','fDesde','fHasta'].forEach(i=>$(i).value='');
+  state.estados=new Set(); buildEstadoPanel();
+  state.open.clear();                       // colapsa los reclamos desplegados
+  Object.assign(state,{q:'',tipo:'',distrito:'',desde:'',hasta:'',page:1}); render();
 });
 
 /* ------------------------- vencimiento (anillo de progreso) ------------------------- */
@@ -630,9 +692,11 @@ function slaInfo(x){
   const r=x.r||{}; if(x.orphan||!r['Fecha de registro']) return null;
   const reg=parseRegDate(r['Fecha de registro']); if(!reg) return null;
   const rule=CFG.SLA.find(s=>s.re.test(norm(r[s.campo]))); if(!rule) return null;
-  if(CFG.SLA_OCULTAR_CERRADOS && /cerrad|finaliz|resuelt|solucion|cancel|anulad/.test(norm(r['Estado']))) return {closed:true};
+  if(CFG.SLA_OCULTAR_CERRADOS && CLOSED_RE.test(norm(r['Estado']))) return {closed:true};
   return {due:reg+rule.horas*3600e3, total:rule.horas};
 }
+const CLOSED_RE=/cerrad|finaliz|resuelt|solucion|cancel|anulad/;
+const isClosed=x=>CLOSED_RE.test(norm((x.r||{})['Estado']));
 const NO_SLA=1e12;   // para ordenar: sin plazo / cerrados al final
 function slaRemaining(x){ const s=slaInfo(x); return (!s||s.closed)?NO_SLA:(s.due-Date.now())/3600e3; }
 function fmtDur(h){
@@ -704,16 +768,16 @@ function tipoChip(t){
 }
 function getFiltered(){
   const q=norm(state.q);
+  const dayMs=(s,add)=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||''); return m?Date.UTC(+m[1],+m[2]-1,+m[3]+add)-CFG.TZ_OFFSET*3600e3:0; };
+  const dFrom=dayMs(state.desde,0), dTo=dayMs(state.hasta,1);   // 'hasta' inclusivo (día completo, hora Argentina)
   let rows=ROWS.filter(x=>{
     const r=x.r;
     if(state.tipo && r['Tipo']!==state.tipo) return false;
-    if(state.estado && r['Estado']!==state.estado) return false;
+    if(state.estados.size && !state.estados.has(r['Estado'])) return false;
     if(state.distrito && r['Distrito']!==state.distrito) return false;
-    if(state.evento && !x.eventos.some(e=>e['Estado']===state.evento)) return false;
-    if(state.ultimo){
-      const l=x.eventos[x.eventos.length-1];
-      if(state.ultimo==='(Sin eventos)'){ if(l) return false; }
-      else if(!l || l['Estado']!==state.ultimo) return false;
+    if(dFrom||dTo){
+      const t=parseRegDate(r['Fecha de registro']);
+      if(!t || (dFrom&&t<dFrom) || (dTo&&t>=dTo)) return false;
     }
     if(q){
       const hay=norm([x.nro,r['Dirección'],r['Descripción'],r['Subtipo'],r['Origen'],
@@ -744,7 +808,7 @@ function detailHTML(x){
   if(meta.length) h+=`<p class="meta">${meta.join(' · ')}</p>`;
   const cd=claimDocs(x);
   if(cd.length) h+=`<h4>Documentos del reclamo</h4><div style="margin:0 0 14px">${thumbsHTML(cd,'c:'+x.key,8)}</div>`;
-  const canAddEv=!!(session&&session.write)&&!x.orphan;   // botón "+" solo con permiso de Escritura (y si el reclamo existe)
+  const canAddEv=!!(session&&session.write)&&!x.orphan&&!isClosed(x);   // botón "+" solo con permiso de Escritura (y si el reclamo existe)
   h+=`<div class="evhead"><h4>Eventos (${x.eventos.length}) · orden ascendente</h4>${canAddEv?`<button type="button" class="btn-add-ev" data-k="${esc(x.key)}" title="Nuevo evento" aria-label="Nuevo evento">+</button>`:''}</div>`;
   if(!x.eventos.length) return h+'<p class="ev-empty">Sin eventos registrados para esta solicitud.</p>';
   const hasCol=n=>EVENTOS.some(e=>n in e);
@@ -911,10 +975,15 @@ function fmtDT(s){
 function buildPrintHTML(rows){
   const uq=a=>[...new Set(a.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const origenes=uq(rows.map(x=>x.r['Origen'])), dist=uq(rows.map(x=>x.r['Distrito']));
+  // Asignación: último valor cargado en los eventos de cada reclamo (sin repetir)
+  const asg=k=>uq(rows.map(x=>{ for(let i=x.eventos.length-1;i>=0;i--){ const v=x.eventos[i][k]; if(v!==undefined&&String(v).trim()) return String(v).trim(); } return ''; }));
+  const tec=asg('Tecnico'), cho=asg('Chofer'), mov=asg('Movil'), tel=[...asg('Telefono'),...asg('Teléfono')];
+  const cell=(t,a)=>`<td><b>${t}</b><span>${esc(a.join(', ')||'—')}</span></td>`;
   let h=`<table class="ph"><tr>
     <td class="l">Municipalidad de Rosario<br>Sistema Único de Atención<br>Listado con equipamiento</td>
-    <td class="c">Origen: ${esc(origenes.join(', ')||'—')}<br>Alumbrado Público${dist.length?' · Distrito '+esc(dist.join(', ')):''}</td>
-    <td class="r">${rows.length} solicitud${rows.length===1?'':'es'}</td></tr></table>`;
+    <td class="c">Origen: ${esc(origenes.join(', ')||'—')}<br>Alumbrado Público</td>
+    <td class="r"><span class="dist">${dist.length?'Distrito '+esc(dist.join(', ')):''}</span>${rows.length} solicitud${rows.length===1?'':'es'}</td></tr></table>
+    <table class="asg"><tr>${cell('Técnico asignado',tec)}${cell('Chofer',cho)}${cell('Móvil',mov)}${cell('Teléfono',tel)}</tr></table>`;
   h+=`<table class="pl"><colgroup><col style="width:7%"><col style="width:8%"><col style="width:12%"><col style="width:13.5%"><col style="width:11%"><col style="width:17%"><col style="width:17.5%"><col style="width:14%"></colgroup>
     <thead><tr><th>Nro</th><th>Fecha<br>Hora</th><th>Temática</th><th>Ubicación</th><th>Equipamiento</th><th>Problema</th><th>Última intervención</th><th>Observaciones</th></tr></thead>`;
   rows.forEach(x=>{
@@ -946,6 +1015,72 @@ function printList(){
   window.print();
 }
 $('printBtn').addEventListener('click',printList);
+
+/* ------------------------- mapa de reclamos (lightbox) ------------------------- */
+/* Coordenadas: Gauss-Krüger POSGAR 94 faja 5 (X = Este con prefijo de faja, Y = Norte; ej. 5434082 / 6356003)
+   o directamente latitud/longitud. Se convierte a lat/lon con la transversa de Mercator inversa (WGS84/GRS80). */
+function gkToLatLon(E,N,faja){
+  const a=6378137, f=1/298.257222101, e2=f*(2-f), ep2=e2/(1-e2), k0=0.9999;
+  const lon0=(-72+(faja-1)*3)*Math.PI/180;      // faja 5 → -60°
+  const arc=p=>a*((1-e2/4-3*e2*e2/64-5*e2**3/256)*p-(3*e2/8+3*e2*e2/32+45*e2**3/1024)*Math.sin(2*p)+(15*e2*e2/256+45*e2**3/1024)*Math.sin(4*p)-(35*e2**3/3072)*Math.sin(6*p));
+  const M0=arc(-Math.PI/2);                      // origen de latitud -90°
+  const x=E-faja*1e6-500000, M=N/k0+M0;
+  const mu=M/(a*(1-e2/4-3*e2*e2/64-5*e2**3/256)), e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const p1=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1*e1/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu)+(1097*e1**4/512)*Math.sin(8*mu);
+  const s=Math.sin(p1), c=Math.cos(p1), t=Math.tan(p1), C1=ep2*c*c, T1=t*t;
+  const Nn=a/Math.sqrt(1-e2*s*s), R1=a*(1-e2)/Math.pow(1-e2*s*s,1.5), D=x/(Nn*k0);
+  const lat=p1-(Nn*t/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D**6/720);
+  const lon=lon0+(D-(1+2*T1+C1)*D**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D**5/120)/c;
+  return [lat*180/Math.PI, lon*180/Math.PI];
+}
+function coordToLatLon(xs,ys){
+  const n=v=>{ const s=String(v==null?'':v).trim().replace(/\s/g,''); if(!s) return NaN;
+    return parseFloat(s.includes(',')&&!s.includes('.')?s.replace(',','.'):s.replace(/,/g,'')); };
+  const X=n(xs), Y=n(ys); if(!isFinite(X)||!isFinite(Y)) return null;
+  if(Math.abs(X)<=180&&Math.abs(Y)<=90){ return (Math.abs(Y)<=90&&Math.abs(X)<=180)?[Y,X]:null; }   // ya son grados (X = lon, Y = lat)
+  const faja=Math.floor(X/1e6);
+  if(faja<1||faja>7||Y<1e6||Y>1e7) return null;
+  const ll=gkToLatLon(X,Y,faja);
+  return (isFinite(ll[0])&&isFinite(ll[1])&&ll[0]<-20&&ll[0]>-56&&ll[1]<-52&&ll[1]>-76)?ll:null;   // dentro de Argentina
+}
+let mapObj=null, mapLayer=null, leafletP=null;
+function loadLeaflet(){
+  if(window.L) return Promise.resolve();
+  if(leafletP) return leafletP;
+  leafletP=new Promise((ok,ko)=>{
+    const css=document.createElement('link'); css.rel='stylesheet'; css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(css);
+    const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload=ok; s.onerror=()=>{ leafletP=null; ko(new Error('No se pudo cargar el mapa (revisá la conexión).')); }; document.head.appendChild(s);
+  });
+  return leafletP;
+}
+async function openMap(){
+  const rows=getFiltered();
+  const pts=[]; rows.forEach(x=>{ const ll=coordToLatLon(x.r['Coordenada X'],x.r['Coordenada Y']); if(ll) pts.push({x,ll}); });
+  if(!pts.length){ toast(rows.length?'Ningún reclamo filtrado tiene coordenadas válidas':'No hay reclamos para mostrar con esos filtros'); return; }
+  $('mapModal').hidden=false;
+  $('mapMsg').textContent=`${pts.length} de ${rows.length} reclamo${rows.length===1?'':'s'} con coordenadas`;
+  try{ await loadLeaflet(); }catch(e){ $('mapMsg').textContent=e.message; $('mapMsg').classList.add('err'); return; }
+  $('mapMsg').classList.remove('err');
+  if(!mapObj){
+    mapObj=L.map('mapBox',{zoomControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(mapObj);
+  }
+  if(mapLayer) mapLayer.remove();
+  mapLayer=L.featureGroup().addTo(mapObj);
+  pts.forEach(({x,ll})=>{
+    const r=x.r, em=norm(r['Tipo'])==='emergencia', cl=isClosed(x);
+    const col=cl?'#2e8b57':(em?'#c0392b':'#d9a21b');
+    const m=L.circleMarker(ll,{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(mapLayer);
+    const lbl=document.createElement('span'); lbl.textContent=`${x.key} · ${r['Dirección']||'s/d'}`;   // textContent: sin inyección de HTML
+    m.bindTooltip(lbl,{permanent:true,direction:'right',offset:[8,0],className:'map-lbl'});
+  });
+  setTimeout(()=>{ mapObj.invalidateSize(); mapObj.fitBounds(mapLayer.getBounds().pad(0.15),{maxZoom:17}); },60);
+}
+function closeMap(){ $('mapModal').hidden=true; }
+$('mapBtn').addEventListener('click',openMap);
+$('mapX').addEventListener('click',closeMap);
+$('mapModal').addEventListener('click',e=>{ if(e.target===$('mapModal')) closeMap(); });
 
 /* ------------------------- alta de reclamo (solo usuarios con Escritura) ------------------------- */
 function addRowHTML(){
@@ -1180,6 +1315,7 @@ $('eBtnApi').addEventListener('click',()=>{ MSG_ID='eMsg'; setApiUrl(); });
 $('evX').addEventListener('click',closeEventForm); $('eCancel').addEventListener('click',closeEventForm);
 $('evModal').addEventListener('mousedown',ev=>{ if(ev.target===$('evModal')) closeEventForm(); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('evModal').hidden) closeEventForm(); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('mapModal').hidden&&$('lb').hidden) closeMap(); });
 $('evForm').addEventListener('submit',async ev=>{
   ev.preventDefault(); if(EVF.busy) return; MSG_ID='eMsg';
   const v=id=>$(id).value.trim();
