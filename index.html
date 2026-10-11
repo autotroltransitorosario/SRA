@@ -161,6 +161,12 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   .pl tr.d td{border-top:1px solid #000}
   .pl tr.gap td{border:0;height:5px;padding:0}
 }
+/* ---------- Alta de evento (botón + del detalle) ---------- */
+.evhead{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.evhead h4{margin:0}
+.btn-add-ev{width:28px;height:28px;border-radius:8px;border:0;background:var(--red);color:#fff;font-size:20px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-add-ev:hover{background:var(--red-dark)}
+.modal-sub{grid-column:1/-1;margin:-4px 0 2px;font-family:var(--mono);font-size:12px;color:var(--text-muted);word-break:break-word}
 /* ---------- Alta de reclamo ---------- */
 tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8px 12px}
 .btn-add{width:34px;height:34px;border-radius:9px;border:0;background:var(--red);color:#fff;font-size:22px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -314,6 +320,41 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     </div>
   </form>
 </div>
+<div class="modal" id="evModal" hidden role="dialog" aria-modal="true" aria-labelledby="evTitle">
+  <form class="modal-card" id="evForm" autocomplete="off" novalidate>
+    <div class="modal-head"><h2 id="evTitle">NUEVO EVENTO</h2><button type="button" id="evX" aria-label="Cerrar">✕</button></div>
+    <div class="modal-body">
+      <div class="modal-sub" id="eInfo"></div>
+      <div class="fld"><label>Nro. solicitud</label><input type="text" id="eNro" readonly></div>
+      <div class="fld"><label>Última intervención</label><input type="text" id="eFecha" readonly></div>
+      <div class="fld"><label for="eEstado">Estado <i>*</i></label><select id="eEstado" required></select></div>
+      <div class="fld"><label for="eTecnico">Técnico</label><select id="eTecnico"></select></div>
+      <div class="fld"><label for="eMovil">Móvil</label><select id="eMovil"></select></div>
+      <div class="fld"><label for="eChofer">Chofer</label><select id="eChofer"></select></div>
+      <div class="fld"><label for="eTelefono">Teléfono</label><select id="eTelefono"></select></div>
+      <div class="fld"><label>Origen (usuario)</label><input type="text" id="eOrigen" readonly></div>
+      <div class="fld full"><label for="eDesc">Descripción</label><textarea id="eDesc" maxlength="2000" placeholder="Breve descripción de la intervención"></textarea></div>
+      <div class="fld full"><label for="eObs">Observaciones</label><textarea id="eObs" maxlength="2000"></textarea></div>
+      <div class="fld full"><label>Documento (foto)</label>
+        <div class="photo-row">
+          <button type="button" id="eBtnCam">📷 Abrir cámara</button>
+          <button type="button" id="eBtnGal">🖼️ Elegir del dispositivo</button>
+          <button type="button" id="eBtnPhotoDel" hidden>✕ Quitar</button>
+          <img class="photo-prev" id="ePhotoPrev" alt="" hidden>
+          <span class="photo-name" id="ePhotoName">Sin foto · se guardará como Estado_Dirección_Fecha_Técnico</span>
+        </div>
+        <input type="file" id="eInCam" accept="image/*" capture="environment" hidden>
+        <input type="file" id="eInGal" accept="image/*" hidden>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="msg" id="eMsg"></span>
+      <button type="button" class="btn-sec" id="eBtnApi" title="Cargar la URL de la Web App de Apps Script">⚙ Configurar URL</button>
+      <button type="button" class="btn-sec" id="eCancel">Cancelar</button>
+      <button type="submit" class="btn-primary" id="eSave">Guardar evento</button>
+    </div>
+  </form>
+</div>
 <div id="printArea" aria-hidden="true"></div>
 <div class="toast" id="toast"></div>
 
@@ -334,7 +375,7 @@ const CFG = {
   REFRESH_MS: 60000,
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -636,12 +677,15 @@ function detailHTML(x){
   if(meta.length) h+=`<p class="meta">${meta.join(' · ')}</p>`;
   const cd=claimDocs(x);
   if(cd.length) h+=`<h4>Documentos del reclamo</h4><div style="margin:0 0 14px">${thumbsHTML(cd,'c:'+x.key,8)}</div>`;
-  h+=`<h4>Eventos (${x.eventos.length}) · orden ascendente</h4>`;
+  const canAddEv=!!(session&&session.write)&&!x.orphan;   // botón "+" solo con permiso de Escritura (y si el reclamo existe)
+  h+=`<div class="evhead"><h4>Eventos (${x.eventos.length}) · orden ascendente</h4>${canAddEv?`<button type="button" class="btn-add-ev" data-k="${esc(x.key)}" title="Nuevo evento" aria-label="Nuevo evento">+</button>`:''}</div>`;
   if(!x.eventos.length) return h+'<p class="ev-empty">Sin eventos registrados para esta solicitud.</p>';
-  h+='<table class="ev-table"><thead><tr><th>#</th><th>Estado</th><th>Última intervención</th><th>Técnico</th><th>Móvil</th><th>Descripción</th><th>Observaciones</th><th>Documento</th><th>Origen</th></tr></thead><tbody>';
+  const hasCol=n=>EVENTOS.some(e=>n in e);
+  const hc=hasCol('Chofer'), ht=hasCol('Telefono')||hasCol('Teléfono');
+  h+=`<table class="ev-table"><thead><tr><th>#</th><th>Estado</th><th>Última intervención</th><th>Técnico</th><th>Móvil</th>${hc?'<th>Chofer</th>':''}${ht?'<th>Teléfono</th>':''}<th>Descripción</th><th>Observaciones</th><th>Documento</th><th>Origen</th></tr></thead><tbody>`;
   x.eventos.forEach((e,i)=>{
     h+=`<tr><td class="nowrap">${i+1}</td><td>${chipFor(e['Estado'])}</td><td class="nowrap">${esc(e['Ultima Intervencion'])}</td>
-      <td>${esc(e['Tecnico'])}</td><td>${esc(e['Movil'])}</td><td>${esc(e['Descripcion'])}</td>
+      <td>${esc(e['Tecnico'])}</td><td>${esc(e['Movil'])}</td>${hc?`<td>${esc(e['Chofer'])}</td>`:''}${ht?`<td>${esc(e['Telefono']??e['Teléfono'])}</td>`:''}<td>${esc(e['Descripcion'])}</td>
       <td>${esc(e['Observaciones'])}</td><td>${thumbsHTML(parseDocs(e['Documento']),'e:'+x.key+':'+i,4)}</td><td>${esc(e['Origen'])}</td></tr>`;
   });
   return h+'</tbody></table>';
@@ -675,6 +719,7 @@ function render(){
   $('prevBtn').disabled=state.page<=1; $('nextBtn').disabled=state.page>=pages;
 }
 $('tbody').addEventListener('click',ev=>{
+  const be=ev.target.closest('.btn-add-ev'); if(be){ openEventForm(be.dataset.k); return; }
   if(ev.target.closest('.btn-add')){ openForm(); return; }
   const th=ev.target.closest('[data-g]');
   if(th){ openFromThumb(th); return; }
@@ -864,7 +909,7 @@ function setApiUrl(){
     formMsg('La URL no es válida. Debe empezar con https://script.google.com/ y terminar en /exec',true); return false;
   }
   try{ localStorage.setItem(AKEY,nv); }catch(e){ formMsg('Este navegador no permite guardar la URL.',true); return false; }
-  $('btnApi').hidden=!!CFG.API_URL; formMsg('URL guardada en este dispositivo.'); return true;
+  $('btnApi').hidden=$('eBtnApi').hidden=!!CFG.API_URL; formMsg('URL guardada en este dispositivo.'); return true;
 }
 async function api(payload){
   if(!apiUrl()){
@@ -899,14 +944,17 @@ function fillOpts(id,arr){
 function applyLists(L){
   FORM.lists=L;
   fillOpts('aEstado',L.estado||[]); fillOpts('aTipo',L.tipo||[]); fillOpts('aSubtipo',L.subtipo||[]); fillOpts('aOrigen',L.origen||[]);
+  fillOpts('eEstado',L.estado||[]); fillOpts('eTecnico',L.tecnico||[]); fillOpts('eMovil',L.movil||[]); fillOpts('eChofer',L.chofer||[]); fillOpts('eTelefono',L.telefono||[]);
   $('distList').innerHTML=uniq(ROWS.map(x=>x.r['Distrito'])).map(v=>`<option value="${esc(v)}">`).join('');
 }
-function formMsg(t,err){ const m=$('formMsg'); m.textContent=t||''; m.className='msg'+(err?' err':''); }
+let MSG_ID='formMsg';   // a qué formulario van los mensajes: 'formMsg' (reclamo) o 'eMsg' (evento)
+function formMsg(t,err){ const m=$(MSG_ID); m.textContent=t||''; m.className='msg'+(err?' err':''); }
 function nowInfo(){ const d=new Date(); return `${d.getFullYear()} · ${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())} (al guardar)`; }
-const hasLists=L=>!!L&&['estado','tipo','subtipo','origen'].some(k=>(L[k]||[]).length>0);
+const hasLists=L=>!!L&&['estado','tipo','subtipo','origen','tecnico','movil','chofer','telefono'].some(k=>(L[k]||[]).length>0);
 /* Busca en las primeras filas los encabezados Estado / Tipo / Subtipo / Origen de la hoja Config y arma las listas */
-const LIST_KEYS=['estado','tipo','subtipo','origen'];
-const LIST_ALIAS={estado:'estado',estados:'estado',tipo:'tipo',tipos:'tipo',subtipo:'subtipo',subtipos:'subtipo',origen:'origen',origenes:'origen'};
+const LIST_KEYS=['estado','tipo','subtipo','origen','tecnico','movil','chofer','telefono'];
+const LIST_ALIAS={estado:'estado',estados:'estado',tipo:'tipo',tipos:'tipo',subtipo:'subtipo',subtipos:'subtipo',origen:'origen',origenes:'origen',
+  tecnico:'tecnico',tecnicos:'tecnico',movil:'movil',moviles:'movil',chofer:'chofer',choferes:'chofer',telefono:'telefono',telefonos:'telefono'};
 /* Devuelve {lists} o {err}. Acepta dos formatos de la hoja Config:
    A) una columna por lista, con encabezado Estado / Tipo / Subtipo / Origen (en cualquiera de las primeras 10 filas)
    B) filas "Estado | valor1 | valor2 ..." (el nombre de la lista en una celda y sus valores a la derecha) */
@@ -915,7 +963,7 @@ function parseConfigLists(rows){
   if(rows.slice(0,5).some(r=>r.some(c=>norm(c)==='nro. solicitud')))
     return {err:'La pestaña leída es la de Reclamos/Eventos, no la de Config. Revisá el gid de CFG.CONFIG en index.html.'};
   const add=(L,k,v)=>{ v=String(v??'').trim(); if(v&&!L[k].includes(v)) L[k].push(v); };
-  const empty=()=>({estado:[],tipo:[],subtipo:[],origen:[]});
+  const empty=()=>{ const o={}; LIST_KEYS.forEach(k=>o[k]=[]); return o; };
   // A) encabezados por columna
   for(let r=0;r<Math.min(rows.length,10);r++){
     const found={};
@@ -954,7 +1002,7 @@ async function loadLists(){
     applyLists(L);
     try{ localStorage.setItem(LKEY,JSON.stringify({ts:Date.now(),lists:L})); }catch(e){}
     if(!apiUrl()) formMsg('Listas cargadas. Falta la URL de Apps Script para poder guardar: tocá «⚙ Configurar URL».',true);
-    else if(!PASS) formMsg('Listas cargadas. Cerrá sesión y volvé a ingresar para poder guardar el reclamo.',true);
+    else if(!PASS) formMsg('Listas cargadas. Cerrá sesión y volvé a ingresar para poder guardar.',true);
     else formMsg('');
   }else{
     formMsg((hasLists(FORM.lists)?'Usando listas guardadas. ':'')+errs.join(' '),true);
@@ -962,7 +1010,7 @@ async function loadLists(){
 }
 function openForm(){
   if(!session||!session.write) return;
-  $('altaForm').reset(); clearPhoto(); formMsg('Cargando listas…');
+  MSG_ID='formMsg'; $('altaForm').reset(); clearPhoto(); formMsg('Cargando listas…');
   FORM.reqId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('r'+Date.now()+Math.random().toString(16).slice(2));
   $('fFechaInfo').value=nowInfo(); $('btnApi').hidden=!!CFG.API_URL;
   $('formModal').hidden=false; document.body.style.overflow='hidden';
@@ -1009,7 +1057,7 @@ $('formModal').addEventListener('mousedown',ev=>{ if(ev.target===$('formModal'))
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('formModal').hidden) closeForm(); });
 
 $('altaForm').addEventListener('submit',async ev=>{
-  ev.preventDefault(); if(FORM.busy) return;
+  ev.preventDefault(); if(FORM.busy) return; MSG_ID='formMsg';
   const v=id=>$(id).value.trim();
   const req=[['aEstado','Estado'],['aTipo','Tipo'],['aSubtipo','Subtipo'],['aOrigen','Origen'],['aDesc','Descripción'],['aDir','Dirección']];
   for(const [id,n] of req){ if(!v(id)){ formMsg('Completá el campo: '+n,true); $(id).focus(); return; } }
@@ -1024,6 +1072,60 @@ $('altaForm').addEventListener('submit',async ev=>{
   }catch(e){
     formMsg(e.message==='NEED_PASS'?'Cerrá sesión y volvé a ingresar para guardar reclamos.':e.message,true);
   }finally{ FORM.busy=false; $('formSave').disabled=false; $('formSave').textContent='Guardar reclamo'; }
+});
+
+/* ------------------------- alta de evento (botón + dentro del detalle del reclamo) ------------------------- */
+const EVF={photo:null,x:null,busy:false,reqId:''};
+function newReqId(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():('r'+Date.now()+Math.random().toString(16).slice(2)); }
+function clearEvPhoto(){
+  EVF.photo=null; $('ePhotoPrev').hidden=true; $('ePhotoPrev').removeAttribute('src'); $('eBtnPhotoDel').hidden=true;
+  $('ePhotoName').textContent='Sin foto · se guardará como Estado_Dirección_Fecha_Técnico'; $('eInCam').value=''; $('eInGal').value='';
+}
+async function onEvPhoto(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  MSG_ID='eMsg';
+  try{
+    formMsg('Procesando foto…');
+    const p=await fileToJpeg(f,1600,0.82);
+    EVF.photo=p; $('ePhotoPrev').src=p.dataUrl; $('ePhotoPrev').hidden=false; $('eBtnPhotoDel').hidden=false;
+    $('ePhotoName').textContent=`Foto lista · ${p.kb} KB`; formMsg('');
+  }catch(e){ clearEvPhoto(); formMsg(e.message,true); }
+}
+function openEventForm(key){
+  if(!session||!session.write) return;
+  const x=ROWS.find(r=>r.key===key); if(!x||x.orphan) return;
+  EVF.x=x; EVF.reqId=newReqId(); MSG_ID='eMsg';
+  $('evForm').reset(); clearEvPhoto();
+  $('eInfo').textContent=`${x.nro}${x.r['Dirección']?' · '+x.r['Dirección']:''}`;
+  $('eNro').value=x.nro; $('eFecha').value='Fecha y hora actuales (al guardar)'; $('eOrigen').value=session.name;
+  $('eBtnApi').hidden=!!CFG.API_URL;
+  $('evModal').hidden=false; document.body.style.overflow='hidden';
+  applyLists(FORM.lists||{estado:[],tipo:[],subtipo:[],origen:[],tecnico:[],movil:[],chofer:[],telefono:[]});
+  formMsg('Cargando listas…'); loadLists();
+}
+function closeEventForm(){ if(EVF.busy) return; $('evModal').hidden=true; document.body.style.overflow=''; }
+$('eBtnCam').addEventListener('click',()=>$('eInCam').click());
+$('eBtnGal').addEventListener('click',()=>$('eInGal').click());
+$('eInCam').addEventListener('change',onEvPhoto); $('eInGal').addEventListener('change',onEvPhoto);
+$('eBtnPhotoDel').addEventListener('click',clearEvPhoto);
+$('eBtnApi').addEventListener('click',()=>{ MSG_ID='eMsg'; setApiUrl(); });
+$('evX').addEventListener('click',closeEventForm); $('eCancel').addEventListener('click',closeEventForm);
+$('evModal').addEventListener('mousedown',ev=>{ if(ev.target===$('evModal')) closeEventForm(); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('evModal').hidden) closeEventForm(); });
+$('evForm').addEventListener('submit',async ev=>{
+  ev.preventDefault(); if(EVF.busy) return; MSG_ID='eMsg';
+  const v=id=>$(id).value.trim();
+  if(!v('eEstado')){ formMsg('Completá el campo: Estado',true); $('eEstado').focus(); return; }
+  EVF.busy=true; $('eSave').disabled=true; $('eSave').textContent='Guardando…'; formMsg(EVF.photo?'Subiendo foto y guardando…':'Guardando…');
+  try{
+    const j=await api({action:'evento',reqId:EVF.reqId,data:{
+      nro:EVF.x.nro,estado:v('eEstado'),tecnico:v('eTecnico'),movil:v('eMovil'),chofer:v('eChofer'),telefono:v('eTelefono'),
+      descripcion:v('eDesc'),observaciones:v('eObs'),foto:EVF.photo?EVF.photo.base64:''}});
+    EVF.busy=false; closeEventForm(); toast('Evento guardado en '+j.nro); refresh(false);
+    setTimeout(()=>refresh(false),6000);   // la lectura pública de Sheets puede demorar unos segundos
+  }catch(e){
+    formMsg(e.message==='NEED_PASS'?'Cerrá sesión y volvé a ingresar para guardar eventos.':e.message,true);
+  }finally{ EVF.busy=false; $('eSave').disabled=false; $('eSave').textContent='Guardar evento'; }
 });
 
 /* ------------------------- arranque ------------------------- */
