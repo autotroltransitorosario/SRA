@@ -35,6 +35,8 @@ button{font-family:inherit}
   padding:22px 24px;display:flex;align-items:center;gap:14px;color:#fff}
 .logo{width:44px;height:44px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;flex:none}
 .logo svg{width:28px;height:28px}
+.lastdt{font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap;font-family:var(--mono)}
+.login-shield{width:56px;height:56px;border-radius:12px;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .login-head h1{margin:0;font-size:22px;letter-spacing:.08em}
 .login-head p{margin:2px 0 0;font-size:12px;color:#aebbd2}
 .login-body{padding:24px;display:flex;flex-direction:column;gap:14px}
@@ -177,7 +179,8 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   #printArea.mapprint{font-size:11pt}
   #printArea.mapprint .ph .r{width:38%}
   #printArea.mapprint .ph .l{width:28%}
-  #pmap{border:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #pmapwrap{border:1px solid #000;overflow:hidden;position:relative;box-sizing:border-box}
+  #pmap{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #pmap .leaflet-control-attribution{font-size:8px}
   .ph .r{text-align:right;font-weight:700;font-size:11pt;width:28%}
   .ph .r .dist{display:block;font-size:16pt;line-height:1.15;margin-bottom:4px}
@@ -248,9 +251,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
 <section id="login" hidden>
   <form class="login-card" id="loginForm" autocomplete="on">
     <div class="login-head">
-      <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64"><path d="M32 6a16 16 0 0 0-9 29.2V42a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-6.8A16 16 0 0 0 32 6z" fill="#f0b54a"/><rect x="24" y="48" width="16" height="4" rx="2" fill="#122036"/><rect x="27" y="54" width="10" height="4" rx="2" fill="#b93b2e"/></svg>
-      </div>
+      <img class="login-shield" src="logo-sra.png" alt="SRA" width="56" height="56">
       <div><h1>SRA</h1><p>Sistema de Reclamos en Alumbrado</p></div>
     </div>
     <div class="login-body">
@@ -643,9 +644,9 @@ function fillFilters(){
   fillSelect('fTipo','Tipo',uniq(ROWS.map(x=>x.r['Tipo'])));
   fillSelect('fDistrito','Distrito',uniq(ROWS.map(x=>x.r['Distrito'])));
   const est=uniq(ROWS.map(x=>x.r['Estado']));
-  if(!estadosInit){            // al ingresar: solo los estados cerrados (si no hay ninguno, sin filtro)
+  if(!estadosInit){            // al ingresar: todos los estados tildados menos los cerrados
     estadosInit=true;
-    est.filter(e=>CLOSED_RE.test(norm(e))).forEach(e=>state.estados.add(e));
+    est.filter(e=>!CLOSED_RE.test(norm(e))).forEach(e=>state.estados.add(e));
   }
   [...state.estados].forEach(e=>{ if(!est.includes(e)) state.estados.delete(e); });
   $('msPanel').dataset.opts=JSON.stringify(est);
@@ -749,7 +750,7 @@ const COLS=[
   {k:'dist',label:'Distrito',val:x=>x.r['Distrito']||''},
   {k:'origen',label:'Origen',val:x=>x.r['Origen']||''},
   {k:'nev',label:'Eventos',val:x=>x.eventos.length},
-  {k:'last',label:'Último evento',val:x=>{const l=x.eventos[x.eventos.length-1];return l?l['Estado']||'':'';}},
+  {k:'last',label:'Último evento',val:x=>{const l=x.eventos[x.eventos.length-1];return l?String(parseEvDate(l['Ultima Intervencion'])).padStart(15,'0'):'';}},
   {k:'tec',label:'Técnico',val:x=>{const l=x.eventos[x.eventos.length-1];return l?l['Tecnico']||'':'';}},
   {k:'docs',label:'Documentos',val:x=>galleryOfRow(x).length}
 ];
@@ -833,6 +834,10 @@ function detailHTML(x){
   });
   return h+'</tbody></table>';
 }
+function lastDT(e){
+  const f=fmtDT(e['Ultima Intervencion']), s=f.d?`${f.d} ${f.t}`:String(e['Ultima Intervencion']||'').trim();
+  return s?`<div class="lastdt">${esc(s)}</div>`:'';
+}
 function render(){
   renderHead();
   const rows=getFiltered();
@@ -854,7 +859,7 @@ function render(){
       <td>${esc(r['Distrito'])}</td>
       <td>${esc(r['Origen'])}</td>
       <td><span class="tab-badge${x.eventos.length?'':' zero'}">${x.eventos.length}</span></td>
-      <td>${last?chipFor(last['Estado']):'<span class="chip grey">—</span>'}</td>
+      <td>${last?chipFor(last['Estado'])+lastDT(last):'<span class="chip grey">—</span>'}</td>
       <td>${esc(last?last['Tecnico']:'')}</td>
       <td>${thumbsHTML(galleryOfRow(x),'r:'+x.key,2)}</td></tr>`;
     return main + (open?`<tr class="detail"><td colspan="${COLS.length}">${detailHTML(x)}</td></tr>`:'');
@@ -1150,25 +1155,26 @@ async function printMap(){
   const btn=$('mapPrint'); btn.disabled=true; const old=btn.textContent; btn.textContent='Preparando…';
   const pts=mapPts, uq=a=>[...new Set(a.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const dist=uq(pts.map(p=>p.x.r['Distrito']));
-  const lats=pts.map(p=>p.ll[0]), lons=pts.map(p=>p.ll[1]);
-  const spanY=Math.max(...lats)-Math.min(...lats), spanX=(Math.max(...lons)-Math.min(...lons))*Math.cos(lats[0]*Math.PI/180);
-  const land=spanX>spanY*1.15;                                  // orientación según la forma de la zona
-  const PW=land?277:190, PH=(land?190:277)-22;                  // mm útiles (A4 − márgenes de 10 mm) y alto de cabecera
+  // Se imprime lo que se ve: mismo centro y mismo zoom, con la hoja completa (se amplía hacia arriba/abajo si hace falta)
+  const sz=mapObj.getSize(), center=mapObj.getCenter(), zoom=mapObj.getZoom();
+  const land=sz.x>=sz.y;
+  const PW=land?277:190, PH=(land?190:277)-22;                  // mm útiles (A4 − márgenes de 10 mm) menos la cabecera
+  const mm=v=>v*96/25.4, k=mm(PW)/sz.x, innerH=Math.ceil(mm(PH)/k);   // k: factor de escala pantalla → papel
   const nw=new Date(), fecha=`${pad2(nw.getDate())}/${pad2(nw.getMonth()+1)}/${nw.getFullYear()}`, hora=`${pad2(nw.getHours())}:${pad2(nw.getMinutes())}`;
   const pa=$('printArea'); pa.classList.add('offscreen','mapprint');
   pa.innerHTML=`<table class="ph"><tr>
     <td class="l">Municipalidad de Rosario<br>Alumbrado Público<br>Mapa de reclamos</td>
     <td class="c"><b>Fecha:</b> ${fecha}<br><b>Hora:</b> ${hora}</td>
     <td class="r"><span class="dist">${dist.length?'Distrito '+esc(dist.join(', ')):'Distrito —'}</span>${pts.length} reclamo${pts.length===1?'':'s'}</td></tr></table>
-    <div id="pmap" style="width:${PW}mm;height:${PH}mm"></div>`;
+    <div id="pmapwrap" style="width:${PW}mm;height:${PH}mm"><div id="pmap" style="width:${sz.x}px;height:${innerH}px;transform:scale(${k});transform-origin:0 0"></div></div>`;
   let st=$('printMeta'); if(!st){ st=document.createElement('style'); st.id='printMeta'; document.head.appendChild(st); }
   st.textContent=`@page{size:A4 ${land?'landscape':'portrait'};margin:10mm}`;
   const pm=L.map('pmap',{zoomControl:false,attributionControl:true,fadeAnimation:false,zoomAnimation:false});
   const tl=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(pm);
   const lay=L.featureGroup().addTo(pm);
   pm.invalidateSize();
-  const pov=addPointMarkers(lay,pts,pm,12);
-  pm.fitBounds(lay.getBounds(),{maxZoom:17,animate:false,padding:[80,60]}); pov.redraw();
+  pm.setView(center,zoom,{animate:false});
+  const pov=addPointMarkers(lay,pts,pm,11); pov.redraw();
   await new Promise(ok=>{ let done=false; const fin=()=>{ if(!done){ done=true; ok(); } }; tl.on('load',fin); setTimeout(fin,8000); });
   await new Promise(r=>setTimeout(r,250));
   const done=()=>{ try{ pov.remove(); pm.remove(); }catch(e){} pa.innerHTML=''; pa.classList.remove('offscreen','mapprint'); st.textContent=''; btn.disabled=false; btn.textContent=old; };
