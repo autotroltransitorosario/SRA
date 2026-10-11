@@ -7,8 +7,9 @@
 <meta name="theme-color" content="#122036">
 <meta name="description" content="Seguimiento online de reclamos de alumbrado y sus eventos de intervención.">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <style>
@@ -49,6 +50,8 @@ button{font-family:inherit}
 .topbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--navy-900),var(--navy-950));
   border-bottom:3px solid var(--red);padding:14px 28px;padding-top:max(14px,env(safe-area-inset-top));
   display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;flex-wrap:wrap}
+.logo-sra{height:48px;width:48px;border-radius:10px;flex:none;margin-right:2px}
+.logo-at{height:44px;width:auto;border-radius:8px;margin-right:14px;flex:none;background:#fff}
 .brand{display:flex;align-items:center;gap:14px}
 .brand .titles{border-left:1px solid rgba(255,255,255,.18);padding-left:14px}
 .brand h1{margin:0;font-size:22px;letter-spacing:.1em}
@@ -254,9 +257,8 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
 <div id="app" hidden>
   <header class="topbar">
     <div class="brand">
-      <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64"><path d="M32 6a16 16 0 0 0-9 29.2V42a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-6.8A16 16 0 0 0 32 6z" fill="#f0b54a"/><rect x="24" y="48" width="16" height="4" rx="2" fill="#122036"/><rect x="27" y="54" width="10" height="4" rx="2" fill="#b93b2e"/></svg>
-      </div>
+      <img class="logo-at" src="logo.png" alt="Autotrol" width="119" height="56">
+      <img class="logo-sra" src="logo-sra.png" alt="SRA" width="48" height="48">
       <div class="titles"><h1>SRA</h1><p>Sistema de Reclamos de Alumbrado</p></div>
     </div>
     <div class="top-right">
@@ -305,7 +307,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <button id="nextBtn">Siguiente →</button>
     </div>
   </main>
-  <footer>SRA · Datos en línea desde Google Sheets · Actualización automática cada minuto</footer>
+  <footer>SRA - Versión 1.9 - Sistema desarrollado por Martin Cipriani</footer>
 </div>
 <div class="modal" id="mapModal" hidden role="dialog" aria-modal="true" aria-labelledby="mapTitle">
   <div class="modal-card mapcard">
@@ -421,7 +423,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -978,12 +980,13 @@ function buildPrintHTML(rows){
   // Asignación: último valor cargado en los eventos de cada reclamo (sin repetir)
   const asg=k=>uq(rows.map(x=>{ for(let i=x.eventos.length-1;i>=0;i--){ const v=x.eventos[i][k]; if(v!==undefined&&String(v).trim()) return String(v).trim(); } return ''; }));
   const tec=asg('Tecnico'), cho=asg('Chofer'), mov=asg('Movil'), tel=[...asg('Telefono'),...asg('Teléfono')];
+  const nw=new Date(), fdt=`${pad2(nw.getDate())}/${pad2(nw.getMonth()+1)}/${nw.getFullYear()}<br>${pad2(nw.getHours())}:${pad2(nw.getMinutes())}`;
   const cell=(t,a)=>`<td><b>${t}</b><span>${esc(a.join(', ')||'—')}</span></td>`;
   let h=`<table class="ph"><tr>
     <td class="l">Municipalidad de Rosario<br>Sistema Único de Atención<br>Listado con equipamiento</td>
     <td class="c">Origen: ${esc(origenes.join(', ')||'—')}<br>Alumbrado Público</td>
     <td class="r"><span class="dist">${dist.length?'Distrito '+esc(dist.join(', ')):''}</span>${rows.length} solicitud${rows.length===1?'':'es'}</td></tr></table>
-    <table class="asg"><tr>${cell('Técnico asignado',tec)}${cell('Chofer',cho)}${cell('Móvil',mov)}${cell('Teléfono',tel)}</tr></table>`;
+    <table class="asg"><tr>${cell('Técnico asignado',tec)}<td><b>Fecha y hora</b><span>${fdt}</span></td>${cell('Chofer',cho)}${cell('Móvil',mov)}${cell('Teléfono',tel)}</tr></table>`;
   h+=`<table class="pl"><colgroup><col style="width:7%"><col style="width:8%"><col style="width:12%"><col style="width:13.5%"><col style="width:11%"><col style="width:17%"><col style="width:17.5%"><col style="width:14%"></colgroup>
     <thead><tr><th>Nro</th><th>Fecha<br>Hora</th><th>Temática</th><th>Ubicación</th><th>Equipamiento</th><th>Problema</th><th>Última intervención</th><th>Observaciones</th></tr></thead>`;
   rows.forEach(x=>{
