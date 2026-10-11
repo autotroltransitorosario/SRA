@@ -161,6 +161,11 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   .pl tr.d td{border-top:1px solid #000}
   .pl tr.gap td{border:0;height:5px;padding:0}
 }
+/* ---------- Anillo de vencimiento ---------- */
+td.ringtd{padding-top:5px;padding-bottom:5px;vertical-align:middle}
+.ringw{display:inline-flex}
+.ring{display:block}
+.ring-done{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#e1f2e8;color:var(--green);font-weight:700;font-size:16px}
 /* ---------- Alta de evento (botón + del detalle) ---------- */
 .evhead{display:flex;align-items:center;gap:10px;margin:0 0 6px}
 .evhead h4{margin:0}
@@ -259,6 +264,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <span><i class="dot" style="background:var(--amber)"></i>En curso / asignado</span>
       <span><i class="dot" style="background:var(--navy-700)"></i>Intervenido</span>
       <span><i class="dot" style="background:var(--red)"></i>Emergencia</span>
+      <span><svg width="14" height="14" viewBox="0 0 40 40" style="vertical-align:-2px"><circle cx="20" cy="20" r="15" fill="none" stroke="#e5e9f0" stroke-width="6"/><circle cx="20" cy="20" r="15" fill="none" stroke="var(--green)" stroke-width="6" stroke-dasharray="94.25" stroke-dashoffset="30"/></svg> Vence en: <b style="color:var(--green)">≥24 h</b> · <b style="color:#d9a21b">12–24 h</b> · <b style="color:var(--red)">&lt;12 h</b></span>
       <span>Tocá una fila para ver sus eventos</span>
     </p>
 
@@ -373,9 +379,18 @@ const CFG = {
   CONFIG:   { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '561896473', name: 'Config' },
   USUARIOS: { id: '1HQpjqCY6NV5EOl4GXLKJ_ogM4WCSeRD8XEKiHHaclCQ', gid: '0',          name: 'Lista de Usuario' },
   REFRESH_MS: 60000,
+  /* Plazos de vencimiento (anillo). Se evalúan en orden y gana la primera regla que coincida.
+     campo: columna de Reclamos · re: texto a buscar (sin tildes, en minúsculas) · horas: plazo desde la Fecha de registro */
+  SLA: [
+    { campo: 'Tipo',    re: /emergenc/, horas: 1 },    // Emergencias: 1 h
+    { campo: 'Subtipo', re: /lampara/,  horas: 48 },   // Lámpara apagada o encendida: 48 h
+    { campo: 'Subtipo', re: /sector/,   horas: 24 }    // Sectores apagados o encendidos: 24 h
+  ],
+  SLA_OCULTAR_CERRADOS: true,   // los reclamos cerrados/resueltos muestran ✓ en lugar del anillo
+  TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -527,7 +542,12 @@ function parseEvDate(s){
 
 /* Agrupa: cada reclamo con todos los eventos que comparten Nro. solicitud
    (se comparan por los dígitos, así "SUA_557280" == "557280"). */
+/* Normaliza los encabezados de Evento Reclamo (tildes, mayúsculas) a los nombres que usa la app */
+const EV_CANON={'nro. solicitud':'Nro. solicitud','estado':'Estado','ultima intervencion':'Ultima Intervencion','tecnico':'Tecnico','movil':'Movil',
+  'chofer':'Chofer','telefono':'Telefono','descripcion':'Descripcion','documento':'Documento','observaciones':'Observaciones','origen':'Origen'};
+function canonEv(e){ const o={}; Object.keys(e).forEach(k=>{ o[EV_CANON[norm(k)]||k]=e[k]; }); return o; }
 function buildRows(){
+  EVENTOS=EVENTOS.map(canonEv);
   const ev=new Map();
   EVENTOS.forEach(e=>{
     const k=keyOf(e['Nro. solicitud']); if(!k) return;
@@ -595,11 +615,58 @@ $('clearBtn').addEventListener('click',()=>{
   Object.assign(state,{q:'',tipo:'',estado:'',evento:'',distrito:'',ultimo:'',page:1}); render();
 });
 
+/* ------------------------- vencimiento (anillo de progreso) ------------------------- */
+/* "2026-08-24 19:12:23" o "24/08/2026 19:12:23" (hora de Argentina) -> milisegundos UTC */
+function parseRegDate(s){
+  s=String(s||'').trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/), Y,M,D;
+  if(m){ Y=+m[1]; M=+m[2]; D=+m[3]; }
+  else if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))){ D=+m[1]; M=+m[2]; Y=+m[3]; }
+  else return 0;
+  return Date.UTC(Y,M-1,D,+(m[4]||0),+(m[5]||0),+(m[6]||0)) - CFG.TZ_OFFSET*3600e3;
+}
+/* null = sin plazo aplicable · {closed:true} = reclamo cerrado · {due,total} = vence en `due` (ms) con plazo de `total` horas */
+function slaInfo(x){
+  const r=x.r||{}; if(x.orphan||!r['Fecha de registro']) return null;
+  const reg=parseRegDate(r['Fecha de registro']); if(!reg) return null;
+  const rule=CFG.SLA.find(s=>s.re.test(norm(r[s.campo]))); if(!rule) return null;
+  if(CFG.SLA_OCULTAR_CERRADOS && /cerrad|finaliz|resuelt|solucion|cancel|anulad/.test(norm(r['Estado']))) return {closed:true};
+  return {due:reg+rule.horas*3600e3, total:rule.horas};
+}
+const NO_SLA=1e12;   // para ordenar: sin plazo / cerrados al final
+function slaRemaining(x){ const s=slaInfo(x); return (!s||s.closed)?NO_SLA:(s.due-Date.now())/3600e3; }
+function fmtDur(h){
+  const t=Math.round(Math.abs(h)*60), d=Math.floor(t/1440), hh=Math.floor((t%1440)/60), mm=t%60;
+  return d?`${d} d ${hh} h`:(hh?`${hh} h ${mm} min`:`${mm} min`);
+}
+function ringSVG(due,total){
+  const rem=(due-Date.now())/3600e3, over=rem<=0;
+  const col=rem>=24?'var(--green)':(rem>=12?'#d9a21b':'var(--red)');     // ≥24 h verde · 12–24 h amarillo · <12 h rojo
+  const frac=over?1:Math.max(0,Math.min(1,rem/total)), C=2*Math.PI*15, a=Math.abs(rem);
+  const lab=a>=100?(over?'-99h+':'99h+'):(a>=1?Math.floor(a)+'h':Math.max(1,Math.ceil(a*60))+'m');
+  const txt=(over?'-':'')+lab.replace(/^-/,'');
+  const when=new Date(due).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  const title=`Vence ${when} · ${over?'vencido hace '+fmtDur(rem):'faltan '+fmtDur(rem)} · plazo ${total} h`;
+  return `<svg class="ring" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title>`
+    +`<circle cx="20" cy="20" r="15" fill="none" stroke="#e5e9f0" stroke-width="4"/>`
+    +`<circle cx="20" cy="20" r="15" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C*(1-frac)).toFixed(2)}" transform="rotate(-90 20 20)"/>`
+    +`<text x="20" y="23.5" text-anchor="middle" font-size="${txt.length>4?8:10}" font-weight="700" fill="${col}" font-family="var(--mono)">${esc(txt)}</text></svg>`;
+}
+function ringCell(x){
+  const s=slaInfo(x);
+  if(!s) return '<span class="chip grey" title="Sin plazo definido para este tipo de reclamo">—</span>';
+  if(s.closed) return '<span class="ring-done" title="Reclamo cerrado">✓</span>';
+  return `<span class="ringw" data-due="${s.due}" data-total="${s.total}">${ringSVG(s.due,s.total)}</span>`;
+}
+let ringTimer=null;
+function tickRings(){ document.querySelectorAll('.ringw').forEach(el=>{ el.innerHTML=ringSVG(+el.dataset.due,+el.dataset.total); }); }
+
 /* ------------------------- tabla ------------------------- */
 const COLS=[
   {k:'nro',label:'Nro. solicitud',val:x=>Number(x.key)},
   {k:'fecha',label:'Fecha de registro',val:x=>x.r['Fecha de registro']||''},
   {k:'estado',label:'Estado',val:x=>x.r['Estado']||''},
+  {k:'sla',label:'Vence en',val:slaRemaining},
   {k:'tipo',label:'Tipo',val:x=>x.r['Tipo']||''},
   {k:'subtipo',label:'Subtipo',val:x=>x.r['Subtipo']||''},
   {k:'dir',label:'Dirección',val:x=>x.r['Dirección']||''},
@@ -704,6 +771,7 @@ function render(){
       <td class="nro"><span class="caret">▸</span>${esc(x.nro)}${x.orphan?' <span class="orphan">(sin reclamo)</span>':''}</td>
       <td class="nowrap">${esc(r['Fecha de registro'])}</td>
       <td>${chipFor(r['Estado'])}</td>
+      <td class="ringtd">${ringCell(x)}</td>
       <td>${tipoChip(r['Tipo'])}</td>
       <td>${esc(r['Subtipo'])}</td>
       <td>${esc(r['Dirección'])}</td>
@@ -1121,7 +1189,8 @@ $('evForm').addEventListener('submit',async ev=>{
     const j=await api({action:'evento',reqId:EVF.reqId,data:{
       nro:EVF.x.nro,estado:v('eEstado'),tecnico:v('eTecnico'),movil:v('eMovil'),chofer:v('eChofer'),telefono:v('eTelefono'),
       descripcion:v('eDesc'),observaciones:v('eObs'),foto:EVF.photo?EVF.photo.base64:''}});
-    EVF.busy=false; closeEventForm(); toast('Evento guardado en '+j.nro); refresh(false);
+    EVF.busy=false; closeEventForm();
+    toast(j.aviso?j.aviso:('Evento guardado en '+j.nro+(j.estadoReclamo?' · reclamo → '+j.estadoReclamo:''))); refresh(false);
     setTimeout(()=>refresh(false),6000);   // la lectura pública de Sheets puede demorar unos segundos
   }catch(e){
     formMsg(e.message==='NEED_PASS'?'Cerrá sesión y volvé a ingresar para guardar eventos.':e.message,true);
@@ -1138,6 +1207,7 @@ function enterApp(){
   revalidate();
   clearInterval(timer);
   timer=setInterval(()=>{ if(!document.hidden && navigator.onLine){ refresh(false); revalidate(); } }, CFG.REFRESH_MS);
+  clearInterval(ringTimer); ringTimer=setInterval(()=>{ if(!document.hidden) tickRings(); }, 30000);   // el anillo se actualiza solo
 }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden && session) refresh(false); });
 window.addEventListener('online',()=>{ if(session){ toast('Conexión recuperada'); refresh(false); } });
