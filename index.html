@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SRA · Sistema de Reclamos de Alumbrado</title>
+<title>SRA · Sistema de Reclamos en Alumbrado</title>
 <meta name="theme-color" content="#122036">
 <meta name="description" content="Seguimiento online de reclamos de alumbrado y sus eventos de intervención.">
 <link rel="manifest" href="manifest.webmanifest">
@@ -51,7 +51,7 @@ button{font-family:inherit}
   border-bottom:3px solid var(--red);padding:14px 28px;padding-top:max(14px,env(safe-area-inset-top));
   display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;flex-wrap:wrap}
 .logo-sra{height:48px;width:48px;border-radius:10px;flex:none;margin-right:2px}
-.logo-at{height:44px;width:auto;border-radius:8px;margin-right:14px;flex:none;background:#fff}
+.logo-at{height:45px;width:auto;border-radius:8px;margin-right:14px;flex:none;background:#fff}
 .brand{display:flex;align-items:center;gap:14px}
 .brand .titles{border-left:1px solid rgba(255,255,255,.18);padding-left:14px}
 .brand h1{margin:0;font-size:22px;letter-spacing:.1em}
@@ -159,6 +159,7 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
 
 /* ---------- Impresión: formato "Listado con equipamiento" ---------- */
 #printArea{display:none}
+#printArea.offscreen{display:block;position:fixed;left:-10000px;top:0;width:277mm}
 @media print{
   @page{size:A4 landscape;margin:10mm 9mm 14mm 9mm}
   html,body{background:#fff!important}
@@ -168,6 +169,12 @@ footer{text-align:center;color:var(--text-muted);font-size:12px;padding:6px 0 24
   .ph td{border:0;padding:0;vertical-align:top}
   .ph .l{width:30%;font-weight:700;font-size:11pt;line-height:1.4}
   .ph .c{font-size:11pt;line-height:1.4;padding-top:8px}
+  #printArea.offscreen{position:static;left:auto;width:auto}
+  #printArea.mapprint{font-size:11pt}
+  #printArea.mapprint .ph .r{width:38%}
+  #printArea.mapprint .ph .l{width:28%}
+  #pmap{border:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #pmap .leaflet-control-attribution{font-size:8px}
   .ph .r{text-align:right;font-weight:700;font-size:11pt;width:28%}
   .ph .r .dist{display:block;font-size:16pt;line-height:1.15;margin-bottom:4px}
   .asg{width:100%;border-collapse:collapse;margin:0 0 8px;table-layout:fixed}
@@ -226,7 +233,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
 @media (max-width:560px){.modal-body{grid-template-columns:1fr}}
 @media (max-width:720px){
   .topbar{padding:12px 14px}main{padding:14px 12px 30px}
-  .brand h1{font-size:18px}.legend{display:none}
+  .logo-at{height:30px;width:auto;margin-right:6px}.brand{gap:8px}.brand h1{font-size:18px}.legend{display:none}
   .table-scroll{max-height:none}
 }
 </style>
@@ -240,7 +247,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <div class="logo" aria-hidden="true">
         <svg viewBox="0 0 64 64"><path d="M32 6a16 16 0 0 0-9 29.2V42a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-6.8A16 16 0 0 0 32 6z" fill="#f0b54a"/><rect x="24" y="48" width="16" height="4" rx="2" fill="#122036"/><rect x="27" y="54" width="10" height="4" rx="2" fill="#b93b2e"/></svg>
       </div>
-      <div><h1>SRA</h1><p>Sistema de Reclamos de Alumbrado</p></div>
+      <div><h1>SRA</h1><p>Sistema de Reclamos en Alumbrado</p></div>
     </div>
     <div class="login-body">
       <div><label for="uName">Usuario</label>
@@ -257,9 +264,8 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
 <div id="app" hidden>
   <header class="topbar">
     <div class="brand">
-      <img class="logo-at" src="logo.png" alt="Autotrol" width="119" height="56">
-      <img class="logo-sra" src="logo-sra.png" alt="SRA" width="48" height="48">
-      <div class="titles"><h1>SRA</h1><p>Sistema de Reclamos de Alumbrado</p></div>
+      <img class="logo-at" src="logo.png" alt="Autotrol" width="182" height="45">
+      <div class="titles"><h1>SRA</h1><p>Sistema de Reclamos en Alumbrado</p></div>
     </div>
     <div class="top-right">
       <span class="pill count" id="countPill">— reclamos</span>
@@ -313,7 +319,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
   <div class="modal-card mapcard">
     <div class="modal-head"><h2 id="mapTitle">RECLAMOS EN EL MAPA</h2><button type="button" id="mapX" aria-label="Cerrar">✕</button></div>
     <div id="mapBox"></div>
-    <div class="modal-foot"><span class="msg" id="mapMsg"></span></div>
+    <div class="modal-foot"><span class="msg" id="mapMsg"></span><button type="button" class="btn-primary" id="mapPrint">🖨️ Imprimir mapa</button></div>
   </div>
 </div>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Imagen del documento">
@@ -986,7 +992,7 @@ function buildPrintHTML(rows){
     <td class="l">Municipalidad de Rosario<br>Sistema Único de Atención<br>Listado con equipamiento</td>
     <td class="c">Origen: ${esc(origenes.join(', ')||'—')}<br>Alumbrado Público</td>
     <td class="r"><span class="dist">${dist.length?'Distrito '+esc(dist.join(', ')):''}</span>${rows.length} solicitud${rows.length===1?'':'es'}</td></tr></table>
-    <table class="asg"><tr>${cell('Técnico asignado',tec)}<td><b>Fecha y hora</b><span>${fdt}</span></td>${cell('Chofer',cho)}${cell('Móvil',mov)}${cell('Teléfono',tel)}</tr></table>`;
+    <table class="asg"><tr><td><b>Fecha y hora</b><span>${fdt}</span></td>${cell('Técnico asignado',tec)}${cell('Chofer',cho)}${cell('Móvil',mov)}${cell('Teléfono',tel)}</tr></table>`;
   h+=`<table class="pl"><colgroup><col style="width:7%"><col style="width:8%"><col style="width:12%"><col style="width:13.5%"><col style="width:11%"><col style="width:17%"><col style="width:17.5%"><col style="width:14%"></colgroup>
     <thead><tr><th>Nro</th><th>Fecha<br>Hora</th><th>Temática</th><th>Ubicación</th><th>Equipamiento</th><th>Problema</th><th>Última intervención</th><th>Observaciones</th></tr></thead>`;
   rows.forEach(x=>{
@@ -1046,7 +1052,7 @@ function coordToLatLon(xs,ys){
   const ll=gkToLatLon(X,Y,faja);
   return (isFinite(ll[0])&&isFinite(ll[1])&&ll[0]<-20&&ll[0]>-56&&ll[1]<-52&&ll[1]>-76)?ll:null;   // dentro de Argentina
 }
-let mapObj=null, mapLayer=null, leafletP=null;
+let mapObj=null, mapLayer=null, leafletP=null, mapPts=[];
 function loadLeaflet(){
   if(window.L) return Promise.resolve();
   if(leafletP) return leafletP;
@@ -1061,7 +1067,7 @@ async function openMap(){
   const rows=getFiltered();
   const pts=[]; rows.forEach(x=>{ const ll=coordToLatLon(x.r['Coordenada X'],x.r['Coordenada Y']); if(ll) pts.push({x,ll}); });
   if(!pts.length){ toast(rows.length?'Ningún reclamo filtrado tiene coordenadas válidas':'No hay reclamos para mostrar con esos filtros'); return; }
-  $('mapModal').hidden=false;
+  mapPts=pts; $('mapModal').hidden=false;
   $('mapMsg').textContent=`${pts.length} de ${rows.length} reclamo${rows.length===1?'':'s'} con coordenadas`;
   try{ await loadLeaflet(); }catch(e){ $('mapMsg').textContent=e.message; $('mapMsg').classList.add('err'); return; }
   $('mapMsg').classList.remove('err');
@@ -1071,15 +1077,49 @@ async function openMap(){
   }
   if(mapLayer) mapLayer.remove();
   mapLayer=L.featureGroup().addTo(mapObj);
+  addPointMarkers(mapLayer,pts);
+  setTimeout(()=>{ mapObj.invalidateSize(); mapObj.fitBounds(mapLayer.getBounds(),{maxZoom:17,paddingTopLeft:[30,30],paddingBottomRight:[230,30]}); },60);
+}
+/* Imprimir mapa: hoja A4 completa con márgenes de 10 mm, cabecera con distrito y fecha/hora.
+   Se arma un mapa aparte con el tamaño exacto de la hoja, para que ocupe todo el espacio. */
+function addPointMarkers(layer,pts){
   pts.forEach(({x,ll})=>{
     const r=x.r, em=norm(r['Tipo'])==='emergencia', cl=isClosed(x);
     const col=cl?'#2e8b57':(em?'#c0392b':'#d9a21b');
-    const m=L.circleMarker(ll,{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(mapLayer);
-    const lbl=document.createElement('span'); lbl.textContent=`${x.key} · ${r['Dirección']||'s/d'}`;   // textContent: sin inyección de HTML
+    const m=L.circleMarker(ll,{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(layer);
+    const lbl=document.createElement('span'); lbl.textContent=`${x.key} · ${r['Dirección']||'s/d'}`;
     m.bindTooltip(lbl,{permanent:true,direction:'right',offset:[8,0],className:'map-lbl'});
   });
-  setTimeout(()=>{ mapObj.invalidateSize(); mapObj.fitBounds(mapLayer.getBounds().pad(0.15),{maxZoom:17}); },60);
 }
+async function printMap(){
+  if(!mapPts.length||!window.L) return;
+  const btn=$('mapPrint'); btn.disabled=true; const old=btn.textContent; btn.textContent='Preparando…';
+  const pts=mapPts, uq=a=>[...new Set(a.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const dist=uq(pts.map(p=>p.x.r['Distrito']));
+  const lats=pts.map(p=>p.ll[0]), lons=pts.map(p=>p.ll[1]);
+  const spanY=Math.max(...lats)-Math.min(...lats), spanX=(Math.max(...lons)-Math.min(...lons))*Math.cos(lats[0]*Math.PI/180);
+  const land=spanX>spanY*1.15;                                  // orientación según la forma de la zona
+  const PW=land?277:190, PH=(land?190:277)-22;                  // mm útiles (A4 − márgenes de 10 mm) y alto de cabecera
+  const nw=new Date(), fecha=`${pad2(nw.getDate())}/${pad2(nw.getMonth()+1)}/${nw.getFullYear()}`, hora=`${pad2(nw.getHours())}:${pad2(nw.getMinutes())}`;
+  const pa=$('printArea'); pa.classList.add('offscreen','mapprint');
+  pa.innerHTML=`<table class="ph"><tr>
+    <td class="l">Municipalidad de Rosario<br>Alumbrado Público<br>Mapa de reclamos</td>
+    <td class="c"><b>Fecha:</b> ${fecha}<br><b>Hora:</b> ${hora}</td>
+    <td class="r"><span class="dist">${dist.length?'Distrito '+esc(dist.join(', ')):'Distrito —'}</span>${pts.length} reclamo${pts.length===1?'':'s'}</td></tr></table>
+    <div id="pmap" style="width:${PW}mm;height:${PH}mm"></div>`;
+  let st=$('printMeta'); if(!st){ st=document.createElement('style'); st.id='printMeta'; document.head.appendChild(st); }
+  st.textContent=`@page{size:A4 ${land?'landscape':'portrait'};margin:10mm}`;
+  const pm=L.map('pmap',{zoomControl:false,attributionControl:true,fadeAnimation:false,zoomAnimation:false});
+  const tl=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(pm);
+  const lay=L.featureGroup().addTo(pm); addPointMarkers(lay,pts);
+  pm.invalidateSize(); pm.fitBounds(lay.getBounds(),{maxZoom:17,animate:false,paddingTopLeft:[30,30],paddingBottomRight:[230,30]});   // margen derecho para las etiquetas
+  await new Promise(ok=>{ let done=false; const fin=()=>{ if(!done){ done=true; ok(); } }; tl.on('load',fin); setTimeout(fin,8000); });
+  await new Promise(r=>setTimeout(r,250));
+  const done=()=>{ try{ pm.remove(); }catch(e){} pa.innerHTML=''; pa.classList.remove('offscreen','mapprint'); st.textContent=''; btn.disabled=false; btn.textContent=old; };
+  window.addEventListener('afterprint',done,{once:true});
+  window.print();
+}
+$('mapPrint').addEventListener('click',printMap);
 function closeMap(){ $('mapModal').hidden=true; }
 $('mapBtn').addEventListener('click',openMap);
 $('mapX').addEventListener('click',closeMap);
