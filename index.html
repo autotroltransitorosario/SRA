@@ -86,6 +86,10 @@ main{padding:20px 28px 40px;max-width:1700px;margin:0 auto}
 .toolbar label.dt input{border:1px solid var(--border);border-radius:9px;padding:8px 9px;font:inherit;font-size:13px;color:var(--text)}
 .modal-card.mapcard{max-width:1100px}
 #mapBox{height:min(70vh,640px);width:100%;background:#e9eef5}
+.lblov{position:absolute;inset:0;z-index:640;pointer-events:none;overflow:hidden}
+.lblsvg{position:absolute;left:0;top:0}
+.lblov .mlb{position:absolute;white-space:nowrap;background:#fff;border:1px solid #0a2770;border-radius:5px;padding:0 6px;font-family:Arial,sans-serif;font-weight:600;color:#122036;box-shadow:0 1px 4px rgba(0,0,0,.28);box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lblov .mlb.em{border-color:#c0392b;color:#8e1f14}
 .map-lbl{background:#fff;border:1px solid var(--navy-700);border-radius:6px;padding:2px 6px;font:600 11px/1.3 Arial,sans-serif;color:#122036;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .map-lbl::before{display:none}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--text-muted);margin:0 0 10px;flex-wrap:wrap}
@@ -1077,19 +1081,69 @@ async function openMap(){
   }
   if(mapLayer) mapLayer.remove();
   mapLayer=L.featureGroup().addTo(mapObj);
-  addPointMarkers(mapLayer,pts);
-  setTimeout(()=>{ mapObj.invalidateSize(); mapObj.fitBounds(mapLayer.getBounds(),{maxZoom:17,paddingTopLeft:[30,30],paddingBottomRight:[230,30]}); },60);
+  if(mapOv) mapOv.remove();
+  mapOv=addPointMarkers(mapLayer,pts,mapObj,11);
+  setTimeout(()=>{ mapObj.invalidateSize(); mapObj.fitBounds(mapLayer.getBounds(),{maxZoom:17,padding:[70,50]}); },60);
 }
 /* Imprimir mapa: hoja A4 completa con márgenes de 10 mm, cabecera con distrito y fecha/hora.
    Se arma un mapa aparte con el tamaño exacto de la hoja, para que ocupe todo el espacio. */
-function addPointMarkers(layer,pts){
+/* Marcadores + etiquetas ubicadas automáticamente: se prueba cada posición alrededor del punto (derecha, izquierda,
+   arriba, abajo, diagonales y, si no alcanza, más lejos con una línea guía) y se elige la que no tapa a otras
+   etiquetas ni a otros puntos. Se recalcula al mover o hacer zoom. */
+let mapOv=null;
+function addPointMarkers(layer,pts,map,fs){
   pts.forEach(({x,ll})=>{
     const r=x.r, em=norm(r['Tipo'])==='emergencia', cl=isClosed(x);
     const col=cl?'#2e8b57':(em?'#c0392b':'#d9a21b');
-    const m=L.circleMarker(ll,{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(layer);
-    const lbl=document.createElement('span'); lbl.textContent=`${x.key} · ${r['Dirección']||'s/d'}`;
-    m.bindTooltip(lbl,{permanent:true,direction:'right',offset:[8,0],className:'map-lbl'});
+    L.circleMarker(ll,{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(layer);
   });
+  return labelOverlay(map,pts,fs||11);
+}
+function labelOverlay(map,pts,fs){
+  const box=map.getContainer();
+  box.querySelectorAll('.lblov').forEach(e=>e.remove());
+  const ov=document.createElement('div'); ov.className='lblov';
+  const NS='http://www.w3.org/2000/svg', svg=document.createElementNS(NS,'svg'); svg.setAttribute('class','lblsvg');
+  ov.appendChild(svg); box.appendChild(ov);
+  const cx=document.createElement('canvas').getContext('2d'); cx.font=`600 ${fs}px Arial,sans-serif`;
+  const H=fs+9;
+  const items=pts.map(p=>{ const t=`${p.x.key} · ${p.x.r['Dirección']||'s/d'}`;
+    return {ll:p.ll,text:t,w:Math.ceil(cx.measureText(t).width)+14,h:H,em:norm(p.x.r['Tipo'])==='emergencia'}; });
+  items.sort((a,b)=>(b.em-a.em));                                  // las emergencias eligen primero
+  const ov2=(a,b)=>Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));
+  function draw(){
+    if(!map._loaded) return;                         // el mapa todavía no tiene centro/zoom
+    const sz=map.getSize(), W=sz.x, Hh=sz.y;
+    svg.setAttribute('width',W); svg.setAttribute('height',Hh);
+    ov.querySelectorAll('.mlb').forEach(e=>e.remove()); svg.innerHTML='';
+    const pos=items.map(it=>{ const q=map.latLngToContainerPoint(it.ll); return {it,x:q.x,y:q.y}; });
+    const dots=pos.map(q=>[q.x-10,q.y-10,q.x+10,q.y+10]);
+    const placed=[];
+    pos.forEach(q=>{
+      const {w,h}=q.it, g=11, cand=[];
+      cand.push([g,-h/2],[-g-w,-h/2],[-w/2,-g-h],[-w/2,g],[g,-g-h],[g,g],[-g-w,-g-h],[-g-w,g]);        // pegadas al punto
+      for(const r of [34,56,82,112,150]) for(let a=0;a<360;a+=30){ const t=a*Math.PI/180; cand.push([r*Math.cos(t)-w/2,r*Math.sin(t)-h/2]); }
+      let best=null,bs=1e18;
+      for(let i=0;i<cand.length;i++){
+        const r=[q.x+cand[i][0],q.y+cand[i][1],q.x+cand[i][0]+w,q.y+cand[i][1]+h];
+        let s=(w*h-ov2(r,[0,0,W,Hh]))*3 + i*0.01;                                                         // fuera del mapa
+        for(const p of placed) s+=ov2(r,p)*2;                                                             // sobre otras etiquetas
+        for(let j=0;j<dots.length;j++) s+=ov2(r,dots[j]);                                                 // sobre algún punto
+        if(s<bs){ bs=s; best={r,far:i>=8}; if(s<0.5) break; }
+      }
+      placed.push(best.r);
+      const lx=best.r[0], ly=best.r[1];
+      if(best.far){                                                                                       // línea guía punto → etiqueta
+        const ex=Math.max(lx,Math.min(q.x,lx+w)), ey=Math.max(ly,Math.min(q.y,ly+h));
+        const ln=document.createElementNS(NS,'line'); ln.setAttribute('x1',q.x); ln.setAttribute('y1',q.y); ln.setAttribute('x2',ex); ln.setAttribute('y2',ey);
+        ln.setAttribute('stroke','#0a2770'); ln.setAttribute('stroke-width','1.2'); svg.appendChild(ln);
+      }
+      const d=document.createElement('div'); d.className='mlb'+(q.it.em?' em':''); d.textContent=q.it.text;
+      d.style.cssText=`left:${lx}px;top:${ly}px;height:${h}px;line-height:${h-2}px;font-size:${fs}px`; ov.appendChild(d);
+    });
+  }
+  map.on('load move zoom resize',draw); draw();
+  return {redraw:draw, remove(){ map.off('load move zoom resize',draw); ov.remove(); }};
 }
 async function printMap(){
   if(!mapPts.length||!window.L) return;
@@ -1111,11 +1165,13 @@ async function printMap(){
   st.textContent=`@page{size:A4 ${land?'landscape':'portrait'};margin:10mm}`;
   const pm=L.map('pmap',{zoomControl:false,attributionControl:true,fadeAnimation:false,zoomAnimation:false});
   const tl=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(pm);
-  const lay=L.featureGroup().addTo(pm); addPointMarkers(lay,pts);
-  pm.invalidateSize(); pm.fitBounds(lay.getBounds(),{maxZoom:17,animate:false,paddingTopLeft:[30,30],paddingBottomRight:[230,30]});   // margen derecho para las etiquetas
+  const lay=L.featureGroup().addTo(pm);
+  pm.invalidateSize();
+  const pov=addPointMarkers(lay,pts,pm,12);
+  pm.fitBounds(lay.getBounds(),{maxZoom:17,animate:false,padding:[80,60]}); pov.redraw();
   await new Promise(ok=>{ let done=false; const fin=()=>{ if(!done){ done=true; ok(); } }; tl.on('load',fin); setTimeout(fin,8000); });
   await new Promise(r=>setTimeout(r,250));
-  const done=()=>{ try{ pm.remove(); }catch(e){} pa.innerHTML=''; pa.classList.remove('offscreen','mapprint'); st.textContent=''; btn.disabled=false; btn.textContent=old; };
+  const done=()=>{ try{ pov.remove(); pm.remove(); }catch(e){} pa.innerHTML=''; pa.classList.remove('offscreen','mapprint'); st.textContent=''; btn.disabled=false; btn.textContent=old; };
   window.addEventListener('afterprint',done,{once:true});
   window.print();
 }
