@@ -86,6 +86,18 @@ main{padding:20px 28px 40px;max-width:1700px;margin:0 auto}
 .ms-panel .ms-acts button{flex:1;border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px;font-size:12px;cursor:pointer}
 .toolbar label.dt{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
 .toolbar label.dt input{border:1px solid var(--border);border-radius:9px;padding:8px 9px;font:inherit;font-size:13px;color:var(--text)}
+.modal.locmodal{z-index:95}
+.locbar{display:flex;gap:8px;padding:12px 16px;background:#fbfcfe;border-bottom:1px solid var(--border-soft)}
+.locbar input{flex:1;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;min-width:0}
+.locres{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px;background:#fbfcfe}
+.locres:not(:empty){padding:8px 16px;border-bottom:1px solid var(--border-soft)}
+.locres button{border:1px solid var(--border);background:#fff;border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;max-width:100%;text-align:left}
+.locres button.on{background:var(--navy-900);color:#fff;border-color:var(--navy-900)}
+#locBox{height:min(56vh,520px);width:100%;background:#e9eef5}
+.pin{width:26px;height:26px;background:var(--red);border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:grab}
+.pin::after{content:"";position:absolute;left:6px;top:6px;width:8px;height:8px;border-radius:50%;background:#fff}
+.locrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.locrow .hint{font-size:12px;color:var(--text-muted);flex:1;min-width:180px}
 .modal-card.mapcard{max-width:1100px}
 #mapBox{height:min(70vh,640px);width:100%;background:#e9eef5}
 .lblov{position:absolute;inset:0;z-index:640;pointer-events:none;overflow:hidden}
@@ -318,13 +330,29 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <button id="nextBtn">Siguiente →</button>
     </div>
   </main>
-  <footer>SRA - Versión 1.10 - Sistema desarrollado por Martin Cipriani</footer>
+  <footer>SRA - Versión 1.9 - Sistema desarrollado por Martin Cipriani</footer>
 </div>
 <div class="modal" id="mapModal" hidden role="dialog" aria-modal="true" aria-labelledby="mapTitle">
   <div class="modal-card mapcard">
     <div class="modal-head"><h2 id="mapTitle">RECLAMOS EN EL MAPA</h2><button type="button" id="mapX" aria-label="Cerrar">✕</button></div>
     <div id="mapBox"></div>
     <div class="modal-foot"><span class="msg" id="mapMsg"></span><button type="button" class="btn-primary" id="mapPrint">🖨️ Imprimir mapa</button></div>
+  </div>
+</div>
+<div class="modal locmodal" id="locModal" hidden role="dialog" aria-modal="true" aria-labelledby="locTitle">
+  <div class="modal-card mapcard">
+    <div class="modal-head"><h2 id="locTitle">UBICAR LA DIRECCIÓN EN EL MAPA</h2><button type="button" id="locX" aria-label="Cerrar">✕</button></div>
+    <div class="locbar">
+      <input type="search" id="locQ" placeholder="Calle y altura" maxlength="300" autocomplete="off">
+      <button type="button" class="btn-sec" id="locGo">🔍 Buscar</button>
+    </div>
+    <div class="locres" id="locRes"></div>
+    <div id="locBox"></div>
+    <div class="modal-foot">
+      <span class="msg" id="locMsg">Arrastrá el punto (o hacé clic en el mapa) si no coincide con la dirección.</span>
+      <button type="button" class="btn-sec" id="locCancel">Cancelar</button>
+      <button type="button" class="btn-primary" id="locUse" disabled>✔ Usar estas coordenadas</button>
+    </div>
   </div>
 </div>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Imagen del documento">
@@ -349,6 +377,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <div class="fld"><label for="aDist">Distrito</label><input id="aDist" type="text" maxlength="100" list="distList" placeholder="Ej.: NORTE"><datalist id="distList"></datalist></div>
       <div class="fld"><label for="aX">Coordenada X</label><input id="aX" type="text" inputmode="decimal" placeholder="Ej.: 5434082.335"></div>
       <div class="fld"><label for="aY">Coordenada Y</label><input id="aY" type="text" inputmode="decimal" placeholder="Ej.: 6356003.941"></div>
+      <div class="fld full locrow"><button type="button" class="btn-sec" id="btnLoc">📍 Ubicar en el mapa por la dirección</button><span class="hint">¿No tenés las coordenadas? Buscá la dirección en el mapa y completalas automáticamente.</span></div>
       <div class="fld full"><label for="aObs">Observaciones</label><textarea id="aObs" maxlength="2000"></textarea></div>
       <div class="fld full"><label>Documento (foto)</label>
         <div class="photo-row">
@@ -434,7 +463,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1061,6 +1090,78 @@ function coordToLatLon(xs,ys){
   const ll=gkToLatLon(X,Y,faja);
   return (isFinite(ll[0])&&isFinite(ll[1])&&ll[0]<-20&&ll[0]>-56&&ll[1]<-52&&ll[1]>-76)?ll:null;   // dentro de Argentina
 }
+/* lat/lon → Gauss-Krüger POSGAR 94 (misma convención de las coordenadas guardadas: X = Este con prefijo de faja, Y = Norte) */
+function latLonToGK(lat,lon){
+  const a=6378137, f=1/298.257222101, e2=f*(2-f), ep2=e2/(1-e2), k0=0.9999, rad=Math.PI/180;
+  const faja=Math.round((lon+72)/3)+1, lon0=(-72+(faja-1)*3)*rad, p=lat*rad;
+  const arc=q=>a*((1-e2/4-3*e2*e2/64-5*e2**3/256)*q-(3*e2/8+3*e2*e2/32+45*e2**3/1024)*Math.sin(2*q)+(15*e2*e2/256+45*e2**3/1024)*Math.sin(4*q)-(35*e2**3/3072)*Math.sin(6*q));
+  const s=Math.sin(p), c=Math.cos(p), t=Math.tan(p), T=t*t, C=ep2*c*c, A=(lon*rad-lon0)*c, N=a/Math.sqrt(1-e2*s*s);
+  const E=k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120)+500000;
+  const Nn=k0*(arc(p)-arc(-Math.PI/2)+N*t*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720));
+  return [faja*1e6+E, Nn];
+}
+/* Ubicar la dirección del formulario en un mapa (Nominatim/OpenStreetMap), ajustar el punto y volcar X/Y */
+let locMap=null, locPin=null, locSel=null;
+const ROSARIO=[-32.9468,-60.6393];
+function locSet(ll,msg){
+  locSel=L.latLng(ll[0],ll[1]);
+  if(!locPin){
+    locPin=L.marker(locSel,{draggable:true,autoPan:true,icon:L.divIcon({className:'',html:'<div class="pin"></div>',iconSize:[26,26],iconAnchor:[13,31]})}).addTo(locMap);
+    locPin.on('dragend',()=>{ locSel=locPin.getLatLng(); locInfo(); });
+  } else locPin.setLatLng(locSel);
+  $('locUse').disabled=false; locInfo(msg);
+}
+function locInfo(extra){
+  const g=latLonToGK(locSel.lat,locSel.lng);
+  $('locMsg').textContent=(extra?extra+' · ':'')+`X ${g[0].toFixed(3)} · Y ${g[1].toFixed(3)} — arrastrá el punto o hacé clic en el mapa para corregir.`;
+}
+async function locSearch(){
+  const raw=$('locQ').value.trim(); if(!raw){ $('locMsg').textContent='Escribí una dirección para buscar.'; return; }
+  $('locMsg').textContent='Buscando…'; $('locRes').innerHTML='';
+  const q=raw.split('/')[0].trim()+', Rosario, Santa Fe, Argentina';
+  try{
+    const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ar&accept-language=es&viewbox=-60.85,-32.78,-60.52,-33.12&q='+encodeURIComponent(q);
+    const res=await fetch(u,{headers:{'Accept':'application/json'}});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const list=await res.json();
+    if(!Array.isArray(list)||!list.length){ $('locMsg').textContent='No se encontró esa dirección. Probá con otra grafía o hacé clic en el mapa para ubicar el punto.'; return; }
+    const pick=i=>{ const r=list[i]; locSet([+r.lat,+r.lon]); locMap.setView([+r.lat,+r.lon],18);
+      [...$('locRes').children].forEach((b,j)=>b.classList.toggle('on',j===i)); };
+    if(list.length>1){
+      list.forEach((r,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=String(r.display_name||'').split(',').slice(0,3).join(','); b.title=r.display_name||''; b.addEventListener('click',()=>pick(i)); $('locRes').appendChild(b); });
+    }
+    pick(0); locInfo('Verificá que el punto corresponda a la dirección');
+    setTimeout(()=>locMap.invalidateSize(),50);
+  }catch(e){ $('locMsg').textContent='No se pudo buscar la dirección ('+(e&&e.message?e.message:'sin conexión')+'). Podés ubicar el punto haciendo clic en el mapa.'; }
+}
+async function openLocMap(){
+  $('locModal').hidden=false; $('locRes').innerHTML=''; $('locUse').disabled=true; locSel=null;
+  $('locQ').value=$('aDir').value.trim(); $('locMsg').textContent='Cargando mapa…';
+  try{ await loadLeaflet(); }catch(e){ $('locMsg').textContent=e.message; return; }
+  if(!locMap){
+    locMap=L.map('locBox',{zoomControl:true}).setView(ROSARIO,13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(locMap);
+    locMap.on('click',e=>locSet([e.latlng.lat,e.latlng.lng],'Punto ubicado manualmente'));
+  }
+  if(locPin){ locPin.remove(); locPin=null; }
+  setTimeout(()=>locMap.invalidateSize(),60);
+  const x=coordToLatLon($('aX').value,$('aY').value);                 // si ya hay coordenadas, se parte de ellas
+  if(x){ locSet(x,'Coordenadas actuales'); locMap.setView(x,18); return; }
+  locMap.setView(ROSARIO,13);
+  if($('locQ').value) locSearch(); else $('locMsg').textContent='Escribí la dirección y buscala, o hacé clic en el mapa.';
+}
+function closeLocMap(){ $('locModal').hidden=true; }
+$('btnLoc').addEventListener('click',openLocMap);
+$('locX').addEventListener('click',closeLocMap); $('locCancel').addEventListener('click',closeLocMap);
+$('locGo').addEventListener('click',locSearch);
+$('locQ').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); locSearch(); } });
+$('locUse').addEventListener('click',()=>{
+  if(!locSel) return;
+  const g=latLonToGK(locSel.lat,locSel.lng);
+  $('aX').value=g[0].toFixed(3); $('aY').value=g[1].toFixed(3);
+  closeLocMap(); toast('Coordenadas cargadas en el formulario');
+});
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('locModal').hidden){ ev.stopImmediatePropagation(); closeLocMap(); } },true);
 let mapObj=null, mapLayer=null, leafletP=null, mapPts=[];
 function loadLeaflet(){
   if(window.L) return Promise.resolve();
