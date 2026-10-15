@@ -86,6 +86,13 @@ main{padding:20px 28px 40px;max-width:1700px;margin:0 auto}
 .ms-panel .ms-acts button{flex:1;border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px;font-size:12px;cursor:pointer}
 .toolbar label.dt{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
 .toolbar label.dt input{border:1px solid var(--border);border-radius:9px;padding:8px 9px;font:inherit;font-size:13px;color:var(--text)}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text);cursor:pointer}
+.chk input{margin-top:3px}
+#waBar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:120;background:var(--navy-900);color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);display:flex;gap:10px;align-items:center;max-width:94vw;flex-wrap:wrap}
+#waBar[hidden]{display:none}
+#waBar button{border:0;border-radius:9px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer}
+#waBar .go{background:#25d366;color:#06310f}
+#waBar .x{background:rgba(255,255,255,.14);color:#fff}
 .modal.locmodal{z-index:95}
 .locbar{display:flex;gap:8px;padding:12px 16px;background:#fbfcfe;border-bottom:1px solid var(--border-soft)}
 .locbar input{flex:1;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;min-width:0}
@@ -355,6 +362,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     </div>
   </div>
 </div>
+<div id="waBar" hidden></div>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Imagen del documento">
   <button class="x" id="lbX" aria-label="Cerrar">✕</button>
   <button class="pv" id="lbP" aria-label="Anterior">‹</button>
@@ -411,6 +419,8 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <div class="fld"><label for="eMovil">Móvil</label><select id="eMovil"></select></div>
       <div class="fld"><label for="eChofer">Chofer</label><select id="eChofer"></select></div>
       <div class="fld"><label for="eTelefono">Teléfono</label><select id="eTelefono"></select></div>
+      <div class="fld"><label for="eWa">Nº para WhatsApp</label><input type="tel" id="eWa" inputmode="tel" placeholder="Se completa según Config" maxlength="30" autocomplete="off"></div>
+      <div class="fld full"><label class="chk"><input type="checkbox" id="eSendWa" checked> Preparar el envío de la asignación por WhatsApp al guardar (móvil, técnico, descripción y foto)</label></div>
       <div class="fld"><label>Origen (usuario)</label><input type="text" id="eOrigen" readonly></div>
       <div class="fld full"><label for="eDesc">Descripción</label><textarea id="eDesc" maxlength="2000" placeholder="Breve descripción de la intervención"></textarea></div>
       <div class="fld full"><label for="eObs">Observaciones</label><textarea id="eObs" maxlength="2000"></textarea></div>
@@ -463,7 +473,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1351,7 +1361,7 @@ function fillOpts(id,arr){
   if(arr.includes(cur)) s.value=cur;
 }
 function applyLists(L){
-  FORM.lists=L;
+  FORM.lists=L; FORM.phones=L.phones||{};
   fillOpts('aEstado',L.estado||[]); fillOpts('aTipo',L.tipo||[]); fillOpts('aSubtipo',L.subtipo||[]); fillOpts('aOrigen',L.origen||[]);
   fillOpts('eEstado',L.estado||[]); fillOpts('eTecnico',L.tecnico||[]); fillOpts('eMovil',L.movil||[]); fillOpts('eChofer',L.chofer||[]); fillOpts('eTelefono',L.telefono||[]);
   $('distList').innerHTML=uniq(ROWS.map(x=>x.r['Distrito'])).map(v=>`<option value="${esc(v)}">`).join('');
@@ -1367,6 +1377,31 @@ const LIST_ALIAS={estado:'estado',estados:'estado',tipo:'tipo',tipos:'tipo',subt
 /* Devuelve {lists} o {err}. Acepta dos formatos de la hoja Config:
    A) una columna por lista, con encabezado Estado / Tipo / Subtipo / Origen (en cualquiera de las primeras 10 filas)
    B) filas "Estado | valor1 | valor2 ..." (el nombre de la lista en una celda y sus valores a la derecha) */
+/* Teléfonos de Config: {nombre/valor de la lista Teléfono → número}. Busca el número en una columna con encabezado tipo
+   Número / Nro / Celular / WhatsApp, o en la columna contigua si ésta tiene números, o en una fila "Número | ..." (formato B).
+   Si el propio valor de la lista ya es un número, se usa tal cual. */
+const NUM_HDR=/numero|nro|celular|whatsapp|wsp|wapp|linea/;
+const isNumLike=s=>/^[+()\d\s.\-]{6,}$/.test(String(s||'').trim())&&String(s).replace(/\D/g,'').length>=6;
+function configPhones(rows){
+  const key=c=>LIST_ALIAS[norm(c)]||'', out={};
+  const put=(l,n)=>{ l=String(l??'').trim(); n=String(n??'').trim(); if(l&&n&&isNumLike(n)) out[l]=n; else if(l&&isNumLike(l)&&!(l in out)) out[l]=l; };
+  for(let r=0;r<Math.min(rows.length,10);r++){                       // A) por columnas
+    if(rows[r].filter(c=>key(c)).length<2) continue;                 // fila de encabezados (≥2 listas)
+    const t=rows[r].findIndex(c=>key(c)==='telefono'); if(t<0) continue;
+    let n=rows[r].findIndex((c,j)=>j!==t&&!key(c)&&NUM_HDR.test(norm(c)));
+    if(n<0){ const nx=rows.slice(r+1).map(x=>x[t+1]).filter(v=>String(v??'').trim()); if(nx.length&&nx.every(isNumLike)&&!key(rows[r][t+1])) n=t+1; }
+    for(let i=r+1;i<rows.length;i++) put(rows[i][t],n>=0?rows[i][n]:'');
+    if(Object.keys(out).length) return out;
+  }
+  for(let r=0;r<rows.length;r++){                                    // B) por filas: "Telefono | v1 | v2" y debajo "Numero | n1 | n2"
+    const cells=rows[r].map(c=>String(c??'').trim()), j=cells.findIndex(Boolean);
+    if(j<0||key(cells[j])!=='telefono') continue;
+    const nr=rows.slice(r+1,r+4).find(x=>{ const c=x.map(v=>String(v??'').trim()), k=c.findIndex(Boolean); return k>=0&&NUM_HDR.test(norm(c[k])); });
+    cells.forEach((v,k)=>{ if(k>j) put(v,nr?nr[k]:''); });
+    if(Object.keys(out).length) return out;
+  }
+  return out;
+}
 function parseConfigLists(rows){
   const key=c=>LIST_ALIAS[norm(c)]||'';
   if(rows.slice(0,5).some(r=>r.some(c=>norm(c)==='nro. solicitud')))
@@ -1380,7 +1415,7 @@ function parseConfigLists(rows){
     if(Object.keys(found).length>=2){
       const L=empty();
       LIST_KEYS.forEach(k=>{ if(k in found) for(let i=r+1;i<rows.length;i++) add(L,k,rows[i][found[k]]); });
-      if(hasLists(L)) return {lists:L};
+      if(hasLists(L)){ L.phones=configPhones(rows); return {lists:L}; }
     }
   }
   // B) nombre de lista + valores en la misma fila
@@ -1391,7 +1426,7 @@ function parseConfigLists(rows){
     if(j<0) return; const k=key(cells[j]); if(!k) return;
     cells.slice(j+1).forEach(v=>add(L,k,v));
   });
-  if(hasLists(L)) return {lists:L};
+  if(hasLists(L)){ L.phones=configPhones(rows); return {lists:L}; }
   const seen=rows.slice(0,3).map(r=>r.map(c=>String(c??'').trim()).filter(Boolean).slice(0,8).join(' | ')).filter(Boolean).join(' // ').slice(0,220);
   return {err:'La hoja Config no tiene encabezados Estado / Tipo / Subtipo / Origen.'+(seen?' Primeras filas leídas: «'+seen+'».':' La hoja leída está vacía.')};
 }
@@ -1522,6 +1557,34 @@ $('evX').addEventListener('click',closeEventForm); $('eCancel').addEventListener
 $('evModal').addEventListener('mousedown',ev=>{ if(ev.target===$('evModal')) closeEventForm(); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('evModal').hidden) closeEventForm(); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('mapModal').hidden&&$('lb').hidden) closeMap(); });
+/* ---- WhatsApp: al elegir el Teléfono se busca su número en Config ---- */
+function waNumber(raw){                                  // → formato internacional para wa.me (Argentina: 549 + área + número)
+  let d=String(raw||'').replace(/\D/g,''); if(!d) return '';
+  d=d.replace(/^00/,'');
+  if(d.startsWith('54')) return d.startsWith('549')||d.length!==12 ? d : '549'+d.slice(2);
+  d=d.replace(/^0/,'');
+  if(d.length===12) d=d.replace(/^(\d{2,4})15(\d{6,8})$/,'$1$2');   // área + 15 + número → quita el 15
+  return d.length===10 ? '549'+d : d;
+}
+function phoneFor(v){ const m=(FORM&&FORM.phones)||{}; return m[v]||(isNumLike(v)?v:''); }
+$('eTelefono').addEventListener('change',()=>{ const n=phoneFor($('eTelefono').value); $('eWa').value=n; $('eWa').placeholder=n||($('eTelefono').value?'No hay número en Config: escribilo':'Se completa según Config'); });
+function waMessage(o){
+  return [`*Asignación de reclamo N.º ${o.nro}*`,
+    o.direccion?`📍 Dirección: ${o.direccion}`:'',
+    o.estado?`Estado: ${o.estado}`:'',
+    o.movil?`🚚 Móvil: ${o.movil}`:'', o.tecnico?`👷 Técnico: ${o.tecnico}`:'',
+    o.descripcion?`📝 Descripción: ${o.descripcion}`:'',
+    o.foto?`📷 Foto: ${o.foto}`:''].filter(Boolean).join('\n');
+}
+function showWaBar(o){
+  const num=waNumber(o.numero); if(!num){ return; }
+  const bar=$('waBar'); bar.innerHTML='';
+  const t=document.createElement('span'); t.textContent=`Evento guardado en ${o.nro}.`; bar.appendChild(t);
+  const go=document.createElement('button'); go.className='go'; go.type='button'; go.textContent='📲 Enviar por WhatsApp';
+  go.addEventListener('click',()=>{ window.open('https://wa.me/'+num+'?text='+encodeURIComponent(waMessage(o)),'_blank','noopener'); bar.hidden=true; });
+  const x=document.createElement('button'); x.className='x'; x.type='button'; x.textContent='✕'; x.setAttribute('aria-label','Cerrar'); x.addEventListener('click',()=>{ bar.hidden=true; });
+  bar.append(go,x); bar.hidden=false; clearTimeout(showWaBar._t); showWaBar._t=setTimeout(()=>{ bar.hidden=true; },120000);
+}
 $('evForm').addEventListener('submit',async ev=>{
   ev.preventDefault(); if(EVF.busy) return; MSG_ID='eMsg';
   const v=id=>$(id).value.trim();
@@ -1531,9 +1594,13 @@ $('evForm').addEventListener('submit',async ev=>{
     const j=await api({action:'evento',reqId:EVF.reqId,data:{
       nro:EVF.x.nro,estado:v('eEstado'),tecnico:v('eTecnico'),movil:v('eMovil'),chofer:v('eChofer'),telefono:v('eTelefono'),
       descripcion:v('eDesc'),observaciones:v('eObs'),foto:EVF.photo?EVF.photo.base64:''}});
-    EVF.busy=false; closeEventForm();
+    EVF.busy=false;
+    const waO={nro:j.nro||EVF.x.nro,numero:v('eWa'),direccion:(EVF.x.r['Dirección']||''),estado:v('eEstado'),movil:v('eMovil'),tecnico:v('eTecnico'),descripcion:v('eDesc')||(EVF.x.r['Descripción']||''),foto:j.documento||''};
+    const sendWa=$('eSendWa').checked&&!!v('eWa');
+    closeEventForm();
     toast(j.aviso?j.aviso:('Evento guardado en '+j.nro+(j.estadoReclamo?' · reclamo → '+j.estadoReclamo:''))); refresh(false);
     setTimeout(()=>refresh(false),6000);   // la lectura pública de Sheets puede demorar unos segundos
+    if(sendWa) showWaBar(waO);
   }catch(e){
     formMsg(e.message==='NEED_PASS'?'Cerrá sesión y volvé a ingresar para guardar eventos.':e.message,true);
   }finally{ EVF.busy=false; $('eSave').disabled=false; $('eSave').textContent='Guardar evento'; }
