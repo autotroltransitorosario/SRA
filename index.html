@@ -477,7 +477,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1076,7 +1076,7 @@ function buildPrintHTML(rows){
     const prob=(f.d?`Fecha y hora en que vio el problema: ${f.d} ${f.t}`:'')+(r['Subtipo']?`${f.d?' | ':''}Tipo de falla: ${r['Subtipo']}`:'');
     let ult='';
     if(l){ const lf=fmtDT(l['Ultima Intervencion']); ult=[(lf.d+' '+lf.t).trim()||l['Ultima Intervencion'], l['Estado'], l['Descripcion']].filter(Boolean).join(' | '); }
-    h+=`<tbody><tr><td class="c">${esc(x.key)}${anio?' - '+esc(anio):''}</td><td class="c f">${esc(f.d)}<br>${esc(f.t)}</td>
+    h+=`<tbody><tr><td class="c">${esc(x.nro)}${anio?' - '+esc(anio):''}</td><td class="c f">${esc(f.d)}<br>${esc(f.t)}</td>
       <td>${esc(tem)}</td><td>${esc(r['Dirección'])}</td><td></td><td>${esc(prob)}</td>
       <td rowspan="2">${esc(ult)}</td><td rowspan="2">${esc(l?l['Observaciones']:'')}</td></tr>
       <tr class="d"><td colspan="6">${esc(r['Descripción'])}</td></tr><tr class="gap"><td colspan="8"></td></tr></tbody>`;
@@ -1249,7 +1249,7 @@ function labelOverlay(map,pts,fs){
   ov.appendChild(svg); box.appendChild(ov);
   const cx=document.createElement('canvas').getContext('2d'); cx.font=`600 ${fs}px Arial,sans-serif`;
   const H=fs+9;
-  const items=pts.map(p=>{ const t=`${p.x.key} · ${p.x.r['Dirección']||'s/d'}`;
+  const items=pts.map(p=>{ const t=`${p.x.nro} · ${p.x.r['Dirección']||'s/d'}`;
     return {ll:p.ll,text:t,w:Math.ceil(cx.measureText(t).width)+14,h:H,em:norm(p.x.r['Tipo'])==='emergencia'}; });
   items.sort((a,b)=>(b.em-a.em));                                  // las emergencias eligen primero
   const ov2=(a,b)=>Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));
