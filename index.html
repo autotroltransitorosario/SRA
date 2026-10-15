@@ -477,7 +477,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1653,6 +1653,14 @@ if(session) enterApp(); else { $('login').hidden=false; $('uName').focus(); }
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  // cuando se instala una versión nueva, recarga una sola vez (si no hay un formulario abierto) para mostrarla
+  let hadCtl=!!navigator.serviceWorker.controller, reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadCtl){ hadCtl=true; return; }
+    if(reloaded) return; reloaded=true;
+    const busy=['formModal','evModal','locModal','mapModal'].some(i=>$(i)&&!$(i).hidden);
+    if(!busy) location.reload();
+  });
 }
 </script>
 </body>

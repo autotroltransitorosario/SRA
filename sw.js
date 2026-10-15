@@ -3,7 +3,7 @@
    - Los datos (Google Sheets, otro origen) NUNCA se cachean aquí: van siempre a la red,
      así las tablas están online y actualizadas. La app guarda su propia copia
      de respaldo solo para mostrar algo si se corta la conexión. */
-const VERSION = 'sra-v21';
+const VERSION = 'sra-v22';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './logo.png', './logo-sra.png', './favicon.png', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -26,7 +26,7 @@ self.addEventListener('fetch', e => {
 
   if (req.mode === 'navigate') {                        // HTML: red primero, caché de respaldo
     e.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache: 'no-store' }).then(res => {     // sin caché HTTP: siempre la versión publicada
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put('./index.html', copy));
         return res;
