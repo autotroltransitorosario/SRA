@@ -35,6 +35,10 @@ button{font-family:inherit}
   padding:22px 24px;display:flex;align-items:center;gap:14px;color:#fff}
 .logo{width:44px;height:44px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;flex:none}
 .logo svg{width:28px;height:28px}
+.chkcol,td.chk{width:38px;text-align:center;padding-left:8px!important;padding-right:4px!important}
+.chkcol input,td.chk input{width:17px;height:17px;accent-color:var(--navy-900);cursor:pointer;vertical-align:middle}
+thead .chkcol input{accent-color:var(--red)}
+tr.main.sel td{background:#eef4ff}
 .lastdt{font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap;font-family:var(--mono)}
 .login-shield{width:56px;height:56px;border-radius:12px;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .login-head h1{margin:0;font-size:22px;letter-spacing:.08em}
@@ -473,7 +477,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -610,7 +614,7 @@ async function revalidate(){
 
 /* ------------------------- datos ------------------------- */
 let RECLAMOS=[], EVENTOS=[], ROWS=[], timer=null, loading=false;
-let state={ q:'', tipo:'', estados:new Set(), distrito:'', desde:'', hasta:'', sortCol:'nro', sortDir:1, page:1, open:new Set() };
+let state={ q:'', tipo:'', estados:new Set(), distrito:'', desde:'', hasta:'', sortCol:'nro', sortDir:1, page:1, open:new Set(), sel:new Set() };
 let estadosInit=false;   // la primera carga deja marcados solo los estados "Cerrado"
 
 const keyOf = v => { const d=String(v??'').replace(/\D/g,'').replace(/^0+/,''); return d; };
@@ -726,6 +730,7 @@ $('clearBtn').addEventListener('click',()=>{
   ['q','fTipo','fDistrito','fDesde','fHasta'].forEach(i=>$(i).value='');
   state.estados=new Set(); buildEstadoPanel();
   state.open.clear();                       // colapsa los reclamos desplegados
+  state.sel.clear();                        // y deja sin tildar la selección
   Object.assign(state,{q:'',tipo:'',distrito:'',desde:'',hasta:'',page:1}); render();
 });
 
@@ -794,15 +799,21 @@ const COLS=[
   {k:'docs',label:'Documentos',val:x=>galleryOfRow(x).length}
 ];
 function renderHead(){
-  $('thead').innerHTML=COLS.map(c=>{
+  $('thead').innerHTML='<th class="chkcol" title="Seleccionar para imprimir / ver en el mapa"><input type="checkbox" id="selAll" aria-label="Seleccionar todos los filtrados"></th>'+COLS.map(c=>{
     const a=state.sortCol===c.k?`<span class="arr">${state.sortDir>0?'▲':'▼'}</span>`:'';
     return `<th data-k="${c.k}">${esc(c.label)}${a}</th>`;
   }).join('');
-  $('thead').querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+  $('thead').querySelectorAll('th[data-k]').forEach(th=>th.addEventListener('click',()=>{
     const k=th.dataset.k;
     if(state.sortCol===k) state.sortDir*=-1; else { state.sortCol=k; state.sortDir=1; }
     state.page=1; render();
   }));
+  $('selAll').addEventListener('click',ev=>{
+    ev.stopPropagation();
+    const rows=getFiltered();
+    if(ev.target.checked) rows.forEach(x=>state.sel.add(x.key)); else rows.forEach(x=>state.sel.delete(x.key));
+    render();
+  });
 }
 function chipFor(estado){
   const e=norm(estado);
@@ -887,7 +898,8 @@ function render(){
   $('empty').hidden=rows.length>0;
   $('tbody').innerHTML=addRowHTML()+slice.map(x=>{
     const r=x.r, last=x.eventos[x.eventos.length-1], open=state.open.has(x.key);
-    const main=`<tr class="main${open?' open':''}" data-k="${esc(x.key)}">
+    const main=`<tr class="main${open?' open':''}${state.sel.has(x.key)?' sel':''}" data-k="${esc(x.key)}">
+      <td class="chk"><input type="checkbox" class="selrow" data-k="${esc(x.key)}" ${state.sel.has(x.key)?'checked':''} aria-label="Seleccionar reclamo ${esc(x.nro)}"></td>
       <td class="nro"><span class="caret">▸</span>${esc(x.nro)}${x.orphan?' <span class="orphan">(sin reclamo)</span>':''}</td>
       <td class="nowrap">${esc(r['Fecha de registro'])}</td>
       <td>${chipFor(r['Estado'])}</td>
@@ -901,12 +913,26 @@ function render(){
       <td>${last?chipFor(last['Estado'])+lastDT(last):'<span class="chip grey">—</span>'}</td>
       <td>${esc(last?last['Tecnico']:'')}</td>
       <td>${thumbsHTML(galleryOfRow(x),'r:'+x.key,2)}</td></tr>`;
-    return main + (open?`<tr class="detail"><td colspan="${COLS.length}">${detailHTML(x)}</td></tr>`:'');
+    return main + (open?`<tr class="detail"><td colspan="${COLS.length+1}">${detailHTML(x)}</td></tr>`:'');
   }).join('');
   $('pageInfo').textContent=`Página ${state.page} / ${pages}`;
   $('prevBtn').disabled=state.page<=1; $('nextBtn').disabled=state.page>=pages;
+  updateSelUI(rows);
+}
+/* Selección para imprimir / mapa: si hay reclamos tildados (entre los filtrados) se usan solo esos; si no, todos los filtrados */
+function selectedOrFiltered(){ const rows=getFiltered(), s=rows.filter(x=>state.sel.has(x.key)); return s.length?s:rows; }
+function updateSelUI(rows){
+  rows=rows||getFiltered();
+  const n=rows.filter(x=>state.sel.has(x.key)).length, all=$('selAll');
+  if(all){ all.checked=rows.length>0&&n===rows.length; all.indeterminate=n>0&&n<rows.length; }
+  const sfx=n?` (${n} seleccionado${n===1?'':'s'})`:'';
+  $('printBtn').textContent='🖨️ Imprimir PDF'+sfx; $('mapBtn').textContent='🗺️ Ver en mapa'+sfx;
+  $('printBtn').title=n?'Imprime solo los reclamos tildados':'Imprime la lista filtrada (tildá reclamos para imprimir solo algunos)';
 }
 $('tbody').addEventListener('click',ev=>{
+  const cb=ev.target.closest('.selrow');
+  if(cb){ ev.stopPropagation(); cb.checked?state.sel.add(cb.dataset.k):state.sel.delete(cb.dataset.k); cb.closest('tr').classList.toggle('sel',cb.checked); updateSelUI(); return; }
+  if(ev.target.closest('td.chk')) return;
   const be=ev.target.closest('.btn-add-ev'); if(be){ openEventForm(be.dataset.k); return; }
   if(ev.target.closest('.btn-add')){ openForm(); return; }
   const th=ev.target.closest('[data-g]');
@@ -1058,7 +1084,7 @@ function buildPrintHTML(rows){
   return h+'</table>';
 }
 function printList(){
-  const rows=getFiltered();
+  const rows=selectedOrFiltered();
   if(!rows.length){ toast('No hay reclamos para imprimir con esos filtros'); return; }
   const now=new Date();
   const stamp=`${pad2(now.getDate())}/${pad2(now.getMonth()+1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
@@ -1184,7 +1210,7 @@ function loadLeaflet(){
   return leafletP;
 }
 async function openMap(){
-  const rows=getFiltered();
+  const rows=selectedOrFiltered();
   const pts=[]; rows.forEach(x=>{ const ll=coordToLatLon(x.r['Coordenada X'],x.r['Coordenada Y']); if(ll) pts.push({x,ll}); });
   if(!pts.length){ toast(rows.length?'Ningún reclamo filtrado tiene coordenadas válidas':'No hay reclamos para mostrar con esos filtros'); return; }
   mapPts=pts; $('mapModal').hidden=false;
@@ -1301,7 +1327,7 @@ $('mapModal').addEventListener('click',e=>{ if(e.target===$('mapModal')) closeMa
 /* ------------------------- alta de reclamo (solo usuarios con Escritura) ------------------------- */
 function addRowHTML(){
   if(!session||!session.write) return '';
-  return `<tr class="addrow"><td colspan="${COLS.length}"><button type="button" class="btn-add" title="Nuevo reclamo" aria-label="Nuevo reclamo">+</button><span class="hint">Nuevo reclamo</span></td></tr>`;
+  return `<tr class="addrow"><td colspan="${COLS.length+1}"><button type="button" class="btn-add" title="Nuevo reclamo" aria-label="Nuevo reclamo">+</button><span class="hint">Nuevo reclamo</span></td></tr>`;
 }
 /* URL de la Web App: la de CFG.API_URL o, si está vacía, la que se cargó desde el formulario (queda guardada en este dispositivo) */
 const AKEY='sra_api';
