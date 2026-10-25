@@ -484,7 +484,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -897,13 +897,23 @@ function detailHTML(x){
   return h+'</tbody></table>';
 }
 /* Celda WhatsApp: número del teléfono (según Config) con enlace para enviar los datos del evento */
+/* Copia el texto al portapapeles (para pegarlo donde se quiera) */
+function copyText(t){
+  try{ if(navigator.clipboard&&window.isSecureContext) return navigator.clipboard.writeText(t).then(()=>true,()=>copyFallback(t)); }catch(e){}
+  return Promise.resolve(copyFallback(t));
+}
+function copyFallback(t){
+  try{ const a=document.createElement('textarea'); a.value=t; a.style.cssText='position:fixed;opacity:0;top:0;left:0'; document.body.appendChild(a); a.select();
+    const ok=document.execCommand('copy'); a.remove(); return ok; }catch(e){ return false; }
+}
+function copyMsg(t){ copyText(t).then(ok=>toast(ok?'Mensaje copiado al portapapeles':'No se pudo copiar el mensaje')); }
 function waCell(x,e){
   const tel=String(e['Telefono']??e['Teléfono']??'').trim(); if(!tel) return '';
   const raw=phoneFor(tel), num=waNumber(raw); if(!num) return '<span class="ev-empty">sin número</span>';
   const d=parseDocs(e['Documento']).find(q=>q.id);
   const msg=waMessage({nro:x.nro,direccion:x.r['Dirección']||'',estado:e['Estado']||'',movil:e['Movil']||'',tecnico:e['Tecnico']||'',
     descripcion:e['Descripcion']||(x.r['Descripción']||''),foto:d?('https://drive.google.com/file/d/'+d.id+'/view'):''});
-  return `<a class="wa-link" href="https://wa.me/${num}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="Enviar los datos por WhatsApp">📲 ${esc(raw)}</a>`;
+  return `<a class="wa-link" data-msg="${esc(msg)}" href="https://wa.me/${num}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="Abre WhatsApp y copia el mensaje al portapapeles">📲 ${esc(raw)}</a>`;
 }
 function lastDT(e){
   const f=fmtDT(e['Ultima Intervencion']), s=f.d?`${f.d} ${f.t}`:String(e['Ultima Intervencion']||'').trim();
@@ -957,6 +967,7 @@ $('tbody').addEventListener('click',ev=>{
   const cb=ev.target.closest('.selrow');
   if(cb){ ev.stopPropagation(); cb.checked?state.sel.add(cb.dataset.k):state.sel.delete(cb.dataset.k); cb.closest('tr').classList.toggle('sel',cb.checked); updateSelUI(); return; }
   if(ev.target.closest('td.chk')) return;
+  const wl=ev.target.closest('.wa-link'); if(wl){ ev.stopPropagation(); copyMsg(wl.dataset.msg||''); return; }
   const be=ev.target.closest('.btn-add-ev'); if(be){ openEventForm(be.dataset.k); return; }
   if(ev.target.closest('.btn-add')){ openForm(); return; }
   const th=ev.target.closest('[data-g]');
@@ -1667,18 +1678,18 @@ async function loadPhones(){
 $('eTelefono').addEventListener('change',()=>{ const n=phoneFor($('eTelefono').value); $('eWa').value=n; $('eWa').placeholder=n||($('eTelefono').value?'No hay número en Config: escribilo':'Se completa según Config'); });
 function waMessage(o){
   return [`*Asignación de reclamo${o.multi?'s':''} N.º ${o.nro}*`,
-    o.direccion?`📍 Dirección: ${o.direccion}`:'',
-    o.estado?`Estado: ${o.estado}`:'',
-    o.movil?`🚚 Móvil: ${o.movil}`:'', o.tecnico?`👷 Técnico: ${o.tecnico}`:'',
-    o.descripcion?`📝 Descripción: ${o.descripcion}`:'',
-    o.foto?`📷 Foto: ${o.foto}`:''].filter(Boolean).join('\n');
+    o.direccion?`· Dirección: ${o.direccion}`:'',
+    o.estado?`· Estado: ${o.estado}`:'',
+    o.movil?`· Móvil: ${o.movil}`:'', o.tecnico?`· Técnico: ${o.tecnico}`:'',
+    o.descripcion?`· Descripción: ${o.descripcion}`:'',
+    o.foto?`· Foto: ${o.foto}`:''].filter(Boolean).join('\n');
 }
 function showWaBar(o){
   const num=waNumber(o.numero); if(!num){ return; }
   const bar=$('waBar'); bar.innerHTML='';
   const t=document.createElement('span'); t.textContent=o.multi?'Eventos guardados.':`Evento guardado en ${o.nro}.`; bar.appendChild(t);
   const go=document.createElement('button'); go.className='go'; go.type='button'; go.textContent='📲 Enviar por WhatsApp';
-  go.addEventListener('click',()=>{ window.open('https://wa.me/'+num+'?text='+encodeURIComponent(waMessage(o)),'_blank','noopener'); bar.hidden=true; });
+  go.addEventListener('click',()=>{ copyMsg(waMessage(o)); window.open('https://wa.me/'+num+'?text='+encodeURIComponent(waMessage(o)),'_blank','noopener'); bar.hidden=true; });
   const x=document.createElement('button'); x.className='x'; x.type='button'; x.textContent='✕'; x.setAttribute('aria-label','Cerrar'); x.addEventListener('click',()=>{ bar.hidden=true; });
   bar.append(go,x); bar.hidden=false; clearTimeout(showWaBar._t); showWaBar._t=setTimeout(()=>{ bar.hidden=true; },120000);
 }
