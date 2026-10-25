@@ -466,7 +466,9 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
    ===================================================================== */
 const CFG = {
   RECLAMOS: { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '2104142061', name: 'Reclamos' },
-  EVENTOS:  { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: null,         name: 'Evento Reclamo' },
+  /* IMPORTANTE: poné acá el gid de la pestaña «Evento Reclamo» (el número que aparece en la URL tras #gid= al abrir esa pestaña).
+     Sin gid se lee por nombre (gviz), y Google deja VACÍOS los números con texto (SUA_… / PRO-…) cuando la columna mezcla números y texto. */
+  EVENTOS:  { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '1978080836', name: 'Evento Reclamo' },
   CONFIG:   { id: '1f8jF7SgBuR-lAe6QmcIWvghS0uMkdd74iL0Fi5qmREs', gid: '561896473', name: 'Config' },
   USUARIOS: { id: '1HQpjqCY6NV5EOl4GXLKJ_ogM4WCSeRD8XEKiHHaclCQ', gid: '0',          name: 'Lista de Usuario' },
   REFRESH_MS: 60000,
@@ -481,7 +483,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -660,15 +662,20 @@ function buildRows(){
   fillFilters();
 }
 
+let EV_SIN_NRO=0;
 async function refresh(manual){
   if(loading) return; loading=true;
   const pill=$('syncPill'); pill.className='pill'; pill.textContent='🔄 Sincronizando…';
   try{
     const [rec,evt]=await Promise.all([fetchSheet(CFG.RECLAMOS), fetchSheet(CFG.EVENTOS), loadDriveIndex()]);
     RECLAMOS=rec; EVENTOS=evt;
+    const sinNro=evt.filter(e=>!keyOf(e['Nro. solicitud']||e['Nro solicitud']||e['nro. solicitud'])&&Object.values(e).filter(v=>String(v||'').trim()).length>1).length;
+    if(sinNro&&CFG.EVENTOS.gid==null) console.warn('Eventos sin Nro. solicitud (Google vació los valores con texto): configurá CFG.EVENTOS.gid');
+    EV_SIN_NRO=CFG.EVENTOS.gid==null?sinNro:0;
     try{ localStorage.setItem(CKEY, JSON.stringify({ts:Date.now(),rec,evt})); }catch(e){}
     buildRows(); render();
-    pill.className='pill ok'; pill.textContent='● En línea · '+new Date().toLocaleTimeString('es-AR');
+    if(EV_SIN_NRO){ pill.className='pill err'; pill.textContent='⚠ '+EV_SIN_NRO+' eventos sin Nro (falta gid de Evento Reclamo)'; pill.title='Google no entrega los Nro. con texto (SUA_/PRO-) al leer por nombre. Configurá CFG.EVENTOS.gid en index.html.'; }
+    else { pill.className='pill ok'; pill.textContent='● En línea · '+new Date().toLocaleTimeString('es-AR'); pill.title=''; }
     if(manual) toast('Datos actualizados');
   }catch(e){
     pill.className='pill err';
