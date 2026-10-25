@@ -231,6 +231,7 @@ td.ringtd{padding-top:5px;padding-bottom:5px;vertical-align:middle}
 .evhead h4{margin:0}
 .btn-add-ev{width:28px;height:28px;border-radius:8px;border:0;background:var(--red);color:#fff;font-size:20px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .btn-add-ev:hover{background:var(--red-dark)}
+.wa-link{color:#128c7e;font-weight:600;text-decoration:none}.wa-link:hover{text-decoration:underline}
 .btn-batch{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important}
 .btn-batch[hidden]{display:none}
 .batchlist{font-size:12px;color:var(--text-muted);margin-top:4px;max-height:64px;overflow:auto}
@@ -483,7 +484,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -887,13 +888,22 @@ function detailHTML(x){
   if(!x.eventos.length) return h+'<p class="ev-empty">Sin eventos registrados para esta solicitud.</p>';
   const hasCol=n=>EVENTOS.some(e=>n in e);
   const hc=hasCol('Chofer'), ht=hasCol('Telefono')||hasCol('Teléfono');
-  h+=`<table class="ev-table"><thead><tr><th>#</th><th>Estado</th><th>Última intervención</th><th>Técnico</th><th>Móvil</th>${hc?'<th>Chofer</th>':''}${ht?'<th>Teléfono</th>':''}<th>Descripción</th><th>Observaciones</th><th>Documento</th><th>Origen</th></tr></thead><tbody>`;
+  h+=`<table class="ev-table"><thead><tr><th>#</th><th>Estado</th><th>Última intervención</th><th>Técnico</th><th>Móvil</th>${hc?'<th>Chofer</th>':''}${ht?'<th>Teléfono</th><th>WhatsApp</th>':''}<th>Descripción</th><th>Observaciones</th><th>Documento</th><th>Origen</th></tr></thead><tbody>`;
   x.eventos.forEach((e,i)=>{
     h+=`<tr><td class="nowrap">${i+1}</td><td>${chipFor(e['Estado'])}</td><td class="nowrap">${esc(e['Ultima Intervencion'])}</td>
-      <td>${esc(e['Tecnico'])}</td><td>${esc(e['Movil'])}</td>${hc?`<td>${esc(e['Chofer'])}</td>`:''}${ht?`<td>${esc(e['Telefono']??e['Teléfono'])}</td>`:''}<td>${esc(e['Descripcion'])}</td>
+      <td>${esc(e['Tecnico'])}</td><td>${esc(e['Movil'])}</td>${hc?`<td>${esc(e['Chofer'])}</td>`:''}${ht?`<td>${esc(e['Telefono']??e['Teléfono'])}</td><td class="nowrap">${waCell(x,e)}</td>`:''}<td>${esc(e['Descripcion'])}</td>
       <td>${esc(e['Observaciones'])}</td><td>${thumbsHTML(parseDocs(e['Documento']),'e:'+x.key+':'+i,4)}</td><td>${esc(e['Origen'])}</td></tr>`;
   });
   return h+'</tbody></table>';
+}
+/* Celda WhatsApp: número del teléfono (según Config) con enlace para enviar los datos del evento */
+function waCell(x,e){
+  const tel=String(e['Telefono']??e['Teléfono']??'').trim(); if(!tel) return '';
+  const raw=phoneFor(tel), num=waNumber(raw); if(!num) return '<span class="ev-empty">sin número</span>';
+  const d=parseDocs(e['Documento']).find(q=>q.id);
+  const msg=waMessage({nro:x.nro,direccion:x.r['Dirección']||'',estado:e['Estado']||'',movil:e['Movil']||'',tecnico:e['Tecnico']||'',
+    descripcion:e['Descripcion']||(x.r['Descripción']||''),foto:d?('https://drive.google.com/file/d/'+d.id+'/view'):''});
+  return `<a class="wa-link" href="https://wa.me/${num}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="Enviar los datos por WhatsApp">📲 ${esc(raw)}</a>`;
 }
 function lastDT(e){
   const f=fmtDT(e['Ultima Intervencion']), s=f.d?`${f.d} ${f.t}`:String(e['Ultima Intervencion']||'').trim();
@@ -1442,6 +1452,23 @@ function configPhones(rows){
   }
   return out;
 }
+/* Búsqueda amplia: para cada valor de la lista Teléfono sin número, lo busca en CUALQUIER celda de Config igual a ese valor
+   y toma el número (≥8 dígitos) de la misma fila (más cercano primero) o, si no, de la celda de abajo / arriba. */
+function fillLoosePhones(rows,L){
+  const ph=L.phones=L.phones||{}, isNum=v=>isNumLike(v)&&String(v).replace(/\D/g,'').length>=8;
+  (L.telefono||[]).forEach(val=>{
+    if(ph[val]&&isNum(ph[val])) return;
+    const want=norm(val); let best='';
+    for(let r=0;r<rows.length&&!best;r++) for(let c=0;c<(rows[r]||[]).length&&!best;c++){
+      if(norm(rows[r][c])!==want) continue;
+      const row=rows[r]; const order=[...row.keys()].filter(j=>j!==c).sort((a,b)=>Math.abs(a-c)-Math.abs(b-c));
+      let hit=order.find(j=>isNum(row[j])&&norm(row[j])!==want);
+      if(hit!==undefined){ best=String(row[hit]).trim(); break; }
+      for(const dr of [1,-1,2,-2]){ const o=rows[r+dr]; if(o&&isNum(o[c])){ best=String(o[c]).trim(); break; } }
+    }
+    if(best) ph[val]=best;
+  });
+}
 function parseConfigLists(rows){
   const key=c=>LIST_ALIAS[norm(c)]||'';
   if(rows.slice(0,5).some(r=>r.some(c=>norm(c)==='nro. solicitud')))
@@ -1455,7 +1482,7 @@ function parseConfigLists(rows){
     if(Object.keys(found).length>=2){
       const L=empty();
       LIST_KEYS.forEach(k=>{ if(k in found) for(let i=r+1;i<rows.length;i++) add(L,k,rows[i][found[k]]); });
-      if(hasLists(L)){ L.phones=configPhones(rows); return {lists:L}; }
+      if(hasLists(L)){ L.phones=configPhones(rows); fillLoosePhones(rows,L); return {lists:L}; }
     }
   }
   // B) nombre de lista + valores en la misma fila
@@ -1466,7 +1493,7 @@ function parseConfigLists(rows){
     if(j<0) return; const k=key(cells[j]); if(!k) return;
     cells.slice(j+1).forEach(v=>add(L,k,v));
   });
-  if(hasLists(L)){ L.phones=configPhones(rows); return {lists:L}; }
+  if(hasLists(L)){ L.phones=configPhones(rows); fillLoosePhones(rows,L); return {lists:L}; }
   const seen=rows.slice(0,3).map(r=>r.map(c=>String(c??'').trim()).filter(Boolean).slice(0,8).join(' | ')).filter(Boolean).join(' // ').slice(0,220);
   return {err:'La hoja Config no tiene encabezados Estado / Tipo / Subtipo / Origen.'+(seen?' Primeras filas leídas: «'+seen+'».':' La hoja leída está vacía.')};
 }
@@ -1622,7 +1649,21 @@ function waNumber(raw){                                  // → formato internac
   if(d.length===12) d=d.replace(/^(\d{2,4})15(\d{6,8})$/,'$1$2');   // área + 15 + número → quita el 15
   return d.length===10 ? '549'+d : d;
 }
-function phoneFor(v){ const m=(FORM&&FORM.phones)||{}; return m[v]||(isNumLike(v)?v:''); }
+function getPhones(){
+  if(FORM.phones&&Object.keys(FORM.phones).length) return FORM.phones;
+  try{ const c=JSON.parse(localStorage.getItem(LKEY)||'null'); if(c&&c.lists&&c.lists.phones) return (FORM.phones=c.lists.phones); }catch(e){}
+  return {};
+}
+function phoneFor(v){ v=String(v||'').trim(); if(!v) return ''; const m=getPhones(); return m[v]||(isNumLike(v)?v:''); }
+/* Carga los teléfonos de Config al entrar (para mostrar el número y el enlace de WhatsApp en la tabla de eventos) */
+async function loadPhones(){
+  try{
+    const res=parseConfigLists(await fetchSheet(CFG.CONFIG,true));
+    if(res.lists){ FORM.phones=res.lists.phones||{};
+      try{ localStorage.setItem(LKEY,JSON.stringify({ts:Date.now(),lists:res.lists})); }catch(e){}
+      render(); }
+  }catch(e){}
+}
 $('eTelefono').addEventListener('change',()=>{ const n=phoneFor($('eTelefono').value); $('eWa').value=n; $('eWa').placeholder=n||($('eTelefono').value?'No hay número en Config: escribilo':'Se completa según Config'); });
 function waMessage(o){
   return [`*Asignación de reclamo${o.multi?'s':''} N.º ${o.nro}*`,
@@ -1699,7 +1740,7 @@ function enterApp(){
   const c=readCache();
   if(c){ RECLAMOS=c.rec; EVENTOS=c.evt; buildRows(); render(); }   // muestra lo último mientras sincroniza
   refresh(false);
-  revalidate();
+  revalidate(); loadPhones();
   clearInterval(timer);
   timer=setInterval(()=>{ if(!document.hidden && navigator.onLine){ refresh(false); revalidate(); } }, CFG.REFRESH_MS);
   clearInterval(ringTimer); ringTimer=setInterval(()=>{ if(!document.hidden) tickRings(); }, 30000);   // el anillo se actualiza solo
