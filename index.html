@@ -386,7 +386,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     <div class="modal-body">
       <div class="fld"><label>Nro. solicitud</label><input type="text" value="Automático" readonly></div>
       <div class="fld"><label>Año / Fecha de registro</label><input type="text" id="fFechaInfo" readonly></div>
-      <div class="fld"><label for="aEstado">Estado <i>*</i></label><select id="aEstado" required></select></div>
+      <div class="fld"><label for="aEstado">Estado <i>*</i></label><select id="aEstado" required></select><span class="hint" id="aEstadoHint"></span></div>
       <div class="fld"><label for="aTipo">Tipo <i>*</i></label><select id="aTipo" required></select></div>
       <div class="fld"><label for="aSubtipo">Subtipo <i>*</i></label><select id="aSubtipo" required></select></div>
       <div class="fld"><label for="aOrigen">Origen <i>*</i></label><select id="aOrigen" required></select></div>
@@ -417,6 +417,13 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
     </div>
   </form>
 </div>
+<div class="modal" id="printWarn" hidden role="alertdialog" aria-modal="true" aria-labelledby="pwTitle">
+  <div class="modal-card" style="max-width:480px">
+    <div class="modal-head"><h2 id="pwTitle">IMPRIMIR RECLAMOS NO ASIGNADOS</h2></div>
+    <div class="modal-body" style="display:block"><div id="pwText" style="font-size:14px;line-height:1.5"></div></div>
+    <div class="modal-foot"><button type="button" class="btn-sec" id="pwCancel">Cancelar</button><button type="button" class="btn-primary" id="pwOk">Aceptar</button></div>
+  </div>
+</div>
 <div class="modal" id="evModal" hidden role="dialog" aria-modal="true" aria-labelledby="evTitle">
   <form class="modal-card" id="evForm" autocomplete="off" novalidate>
     <div class="modal-head"><h2 id="evTitle">NUEVO EVENTO</h2><button type="button" id="evX" aria-label="Cerrar">✕</button></div>
@@ -424,7 +431,7 @@ tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8p
       <div class="modal-sub" id="eInfo"></div>
       <div class="fld"><label>Nro. solicitud</label><input type="text" id="eNro" readonly></div>
       <div class="fld"><label>Última intervención</label><input type="text" id="eFecha" readonly></div>
-      <div class="fld"><label for="eEstado">Estado <i>*</i></label><select id="eEstado" required></select></div>
+      <div class="fld"><label for="eEstado">Estado <i>*</i></label><select id="eEstado" required></select><span class="hint" id="eEstadoHint"></span></div>
       <div class="fld"><label for="eTecnico">Técnico</label><select id="eTecnico"></select></div>
       <div class="fld"><label for="eMovil">Móvil</label><select id="eMovil"></select></div>
       <div class="fld"><label for="eChofer">Chofer</label><select id="eChofer"></select></div>
@@ -485,7 +492,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1125,6 +1132,23 @@ function buildPrintHTML(rows){
 function printList(){
   const rows=selectedOrFiltered();
   if(!rows.length){ toast('No hay reclamos para imprimir con esos filtros'); return; }
+  if(!isAdmin()){
+    const bad=rows.filter(x=>!isAsignado((x.r||{})['Estado']));
+    if(bad.length){ askPrintUnassigned(bad,rows); return; }
+  }
+  doPrint(rows);
+}
+/* Aviso (lightbox) a operadores que no son admin: van a imprimir reclamos que no están Asignados */
+function askPrintUnassigned(bad,rows){
+  const nros=bad.slice(0,12).map(x=>esc(x.nro)).join(', ')+(bad.length>12?'… (+'+(bad.length-12)+')':'');
+  $('pwText').innerHTML=`<b>${esc(session.name)}</b>, estás enviando a imprimir <b>${bad.length}</b> reclamo${bad.length===1?'':'s'} que no ${bad.length===1?'está':'están'} en estado Asignado (de ${rows.length} seleccionado${rows.length===1?'':'s'}).<div class="batchlist">${nros}</div><p style="margin:10px 0 0">¿Querés continuar con la impresión?</p>`;
+  $('printWarn').hidden=false; document.body.style.overflow='hidden';
+  const close=()=>{ $('printWarn').hidden=true; document.body.style.overflow=''; $('pwOk').onclick=$('pwCancel').onclick=null; };
+  $('pwOk').onclick=()=>{ close(); doPrint(rows); };
+  $('pwCancel').onclick=close;
+  $('pwOk').focus();
+}
+function doPrint(rows){
   const now=new Date();
   const stamp=`${pad2(now.getDate())}/${pad2(now.getMonth()+1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
   const who=String(session?session.name:'').replace(/["\\\n\r]/g,'');
@@ -1425,11 +1449,38 @@ function fillOpts(id,arr){
   s.innerHTML='<option value="">— Seleccionar —</option>'+arr.map(v=>`<option>${esc(v)}</option>`).join('');
   if(arr.includes(cur)) s.value=cur;
 }
+/* ---- Reglas de estados según el rol (todo rol que no sea admin) ---- */
+const isAdmin=()=>/^admin/.test(norm(session&&session.rol));
+const isEnCurso=v=>/en\s*curso/.test(norm(v));
+const isAsignado=v=>/asignad|asignacion/.test(norm(v));
+const EST_RULE={a:null,e:null,aMsg:'',eMsg:''};   // a: Nuevo reclamo · e: Nuevo evento (función que dice si un estado se permite)
+function lastEvEstado(x){ const l=x&&x.eventos&&x.eventos[x.eventos.length-1]; return l?l['Estado']:''; }
+/* Nuevo reclamo: un no-admin solo puede elegir «En curso» */
+function ruleAlta(){ return isAdmin()?null:{f:isEnCurso,msg:'Tu rol solo permite el estado En curso'}; }
+/* Nuevo evento: 1 reclamo → depende de su estado/último evento; varios reclamos → solo Asignado */
+function ruleEvento(x,batch){
+  if(isAdmin()) return null;
+  if(batch&&batch.length>=2) return {f:isAsignado,msg:'Con varios reclamos tu rol solo permite el estado Asignado'};
+  if(isEnCurso((x.r||{})['Estado'])) return {f:isAsignado,msg:'El reclamo está En curso: tu rol solo permite el estado Asignado'};
+  if(isAsignado(lastEvEstado(x))) return {f:v=>!isEnCurso(v),msg:'El último evento es Asignado: podés elegir cualquier estado menos En curso'};
+  return null;
+}
+function applyEstadoRule(id,rule,hintId){
+  const sel=$(id), h=$(hintId);
+  if(h) h.textContent=rule?rule.msg:'';
+  if(!rule) return;
+  const keep=[...sel.options].filter(o=>o.value&&rule.f(o.value));
+  [...sel.options].forEach(o=>{ if(o.value&&!rule.f(o.value)) o.remove(); });
+  if(keep.length===1) sel.value=keep[0].value;
+  else if(!keep.length&&h) h.textContent=rule.msg+' (no figura en la hoja Config)';
+}
+function applyEstadoRules(){ applyEstadoRule('aEstado',EST_RULE.a,'aEstadoHint'); applyEstadoRule('eEstado',EST_RULE.e,'eEstadoHint'); }
 function applyLists(L){
   FORM.lists=L; FORM.phones=L.phones||{};
   fillOpts('aEstado',L.estado||[]); fillOpts('aTipo',L.tipo||[]); fillOpts('aSubtipo',L.subtipo||[]); fillOpts('aOrigen',L.origen||[]);
   fillOpts('eEstado',L.estado||[]); fillOpts('eTecnico',L.tecnico||[]); fillOpts('eMovil',L.movil||[]); fillOpts('eChofer',L.chofer||[]); fillOpts('eTelefono',L.telefono||[]);
   $('distList').innerHTML=uniq(ROWS.map(x=>x.r['Distrito'])).map(v=>`<option value="${esc(v)}">`).join('');
+  applyEstadoRules();
 }
 let MSG_ID='formMsg';   // a qué formulario van los mensajes: 'formMsg' (reclamo) o 'eMsg' (evento)
 function formMsg(t,err){ const m=$(MSG_ID); m.textContent=t||''; m.className='msg'+(err?' err':''); }
@@ -1538,6 +1589,7 @@ function openForm(){
   if(!session||!session.write) return;
   MSG_ID='formMsg'; $('altaForm').reset(); clearPhoto(); formMsg('Cargando listas…');
   FORM.reqId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('r'+Date.now()+Math.random().toString(16).slice(2));
+  EST_RULE.a=ruleAlta();
   $('fFechaInfo').value=nowInfo(); $('btnApi').hidden=!!CFG.API_URL;
   $('formModal').hidden=false; document.body.style.overflow='hidden';
   applyLists(FORM.lists||{estado:[],tipo:[],subtipo:[],origen:[]});
@@ -1587,6 +1639,7 @@ $('altaForm').addEventListener('submit',async ev=>{
   const v=id=>$(id).value.trim();
   const req=[['aEstado','Estado'],['aTipo','Tipo'],['aSubtipo','Subtipo'],['aOrigen','Origen'],['aDesc','Descripción'],['aDir','Dirección']];
   for(const [id,n] of req){ if(!v(id)){ formMsg('Completá el campo: '+n,true); $(id).focus(); return; } }
+  if(EST_RULE.a&&!EST_RULE.a.f(v('aEstado'))){ formMsg(EST_RULE.a.msg,true); return; }
   for(const id of ['aX','aY']){ if(v(id)&&isNaN(parseFloat(v(id).replace(',','.')))){ formMsg('Coordenada inválida',true); $(id).focus(); return; } }
   FORM.busy=true; $('formSave').disabled=true; $('formSave').textContent='Guardando…'; formMsg(FORM.photo?'Subiendo foto y guardando…':'Guardando…');
   try{
@@ -1624,6 +1677,7 @@ function openEventForm(key,batch){
     list=batch; if(!list.length) return; x=list[0];
   } else { x=ROWS.find(r=>r.key===key); if(!x||x.orphan) return; }
   EVF.x=x; EVF.batch=list; EVF.reqId=newReqId(); MSG_ID='eMsg';
+  EST_RULE.e=ruleEvento(x,list);
   $('evForm').reset(); clearEvPhoto();
   $('evTitle').textContent=list?`NUEVO EVENTO EN ${list.length} RECLAMOS`:'NUEVO EVENTO';
   $('eSave').textContent=list?`Guardar en ${list.length} reclamos`:'Guardar evento';
@@ -1701,6 +1755,7 @@ $('evForm').addEventListener('submit',async ev=>{
   ev.preventDefault(); if(EVF.busy) return; MSG_ID='eMsg';
   const v=id=>$(id).value.trim();
   if(!v('eEstado')){ formMsg('Completá el campo: Estado',true); $('eEstado').focus(); return; }
+  if(EST_RULE.e&&!EST_RULE.e.f(v('eEstado'))){ formMsg(EST_RULE.e.msg,true); return; }
   EVF.busy=true; $('eSave').disabled=true; $('eSave').textContent='Guardando…';
   const targets=EVF.batch||[EVF.x], total=targets.length, base=EVF.reqId;
   const sendWa=$('eSendWa').checked&&!!v('eWa'), ok=[], fail=[], docs=[];
@@ -1774,7 +1829,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(!hadCtl){ hadCtl=true; return; }
     if(reloaded) return; reloaded=true;
-    const busy=['formModal','evModal','locModal','mapModal'].some(i=>$(i)&&!$(i).hidden);
+    const busy=['formModal','evModal','locModal','mapModal','printWarn'].some(i=>$(i)&&!$(i).hidden);
     if(!busy) location.reload();
   });
 }
