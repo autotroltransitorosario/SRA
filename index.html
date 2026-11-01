@@ -229,8 +229,8 @@ td.ringtd{padding-top:5px;padding-bottom:5px;vertical-align:middle}
 /* ---------- Alta de evento (botón + del detalle) ---------- */
 .evhead{display:flex;align-items:center;gap:10px;margin:0 0 6px}
 .evhead h4{margin:0}
-.btn-add-ev{width:28px;height:28px;border-radius:8px;border:0;background:var(--red);color:#fff;font-size:20px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.btn-add-ev:hover{background:var(--red-dark)}
+.btn-add-ev{height:32px;padding:0 14px;border-radius:8px;border:0;background:var(--navy-800);color:#fff;font-size:13px;line-height:1;font-weight:700;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-add-ev:hover{background:var(--navy-900)}
 .cp-btn{background:none;border:0;padding:3px 4px;margin-left:4px;cursor:pointer;color:var(--navy-700);vertical-align:middle;border-radius:6px;line-height:0}.cp-btn:hover{background:#e5e9f0}
 .wa-link{color:#128c7e;font-weight:600;text-decoration:none}.wa-link:hover{text-decoration:underline}
 .btn-batch{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important}
@@ -239,7 +239,7 @@ td.ringtd{padding-top:5px;padding-bottom:5px;vertical-align:middle}
 .modal-sub{grid-column:1/-1;margin:-4px 0 2px;font-family:var(--mono);font-size:12px;color:var(--text-muted);word-break:break-word}
 /* ---------- Alta de reclamo ---------- */
 tr.addrow td{background:#f4f7fc;border-bottom:2px solid var(--border);padding:8px 12px}
-.btn-add{width:34px;height:34px;border-radius:9px;border:0;background:var(--red);color:#fff;font-size:22px;line-height:1;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-add{height:36px;padding:0 16px;border-radius:9px;border:0;background:var(--red);color:#fff;font-size:14px;line-height:1;font-weight:700;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .btn-add:hover{background:var(--red-dark)}
 .addrow .hint{margin-left:12px;color:var(--text-muted);font-size:12px;vertical-align:middle}
 .modal{position:fixed;inset:0;background:rgba(10,15,26,.72);z-index:90;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
@@ -492,7 +492,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -892,7 +892,7 @@ function detailHTML(x){
   const cd=claimDocs(x);
   if(cd.length) h+=`<h4>Documentos del reclamo</h4><div style="margin:0 0 14px">${thumbsHTML(cd,'c:'+x.key,8)}</div>`;
   const canAddEv=!!(session&&session.write)&&!x.orphan&&!isClosed(x);   // botón "+" solo con permiso de Escritura (y si el reclamo existe)
-  h+=`<div class="evhead"><h4>Eventos (${x.eventos.length}) · orden ascendente</h4>${canAddEv?`<button type="button" class="btn-add-ev" data-k="${esc(x.key)}" title="Nuevo evento" aria-label="Nuevo evento">+</button>`:''}</div>`;
+  h+=`<div class="evhead"><h4>Eventos (${x.eventos.length}) · orden ascendente</h4>${canAddEv?`<button type="button" class="btn-add-ev" data-k="${esc(x.key)}" title="Agregar un nuevo evento a este reclamo">Nuevo evento</button>`:''}</div>`;
   if(!x.eventos.length) return h+'<p class="ev-empty">Sin eventos registrados para esta solicitud.</p>';
   const hasCol=n=>EVENTOS.some(e=>n in e);
   const hc=hasCol('Chofer'), ht=hasCol('Telefono')||hasCol('Teléfono');
@@ -1390,7 +1390,7 @@ $('mapModal').addEventListener('click',e=>{ if(e.target===$('mapModal')) closeMa
 /* ------------------------- alta de reclamo (solo usuarios con Escritura) ------------------------- */
 function addRowHTML(){
   if(!session||!session.write) return '';
-  return `<tr class="addrow"><td colspan="${COLS.length+1}"><button type="button" class="btn-add" title="Nuevo reclamo" aria-label="Nuevo reclamo">+</button><span class="hint">Nuevo reclamo</span></td></tr>`;
+  return `<tr class="addrow"><td colspan="${COLS.length+1}"><button type="button" class="btn-add" title="Ingresar un nuevo reclamo">Ingresar Reclamo</button></td></tr>`;
 }
 /* URL de la Web App: la de CFG.API_URL o, si está vacía, la que se cargó desde el formulario (queda guardada en este dispositivo) */
 const AKEY='sra_api';
