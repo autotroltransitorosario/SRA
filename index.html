@@ -492,7 +492,7 @@ const CFG = {
   TZ_OFFSET: -3,                // la Fecha de registro está en hora de Argentina (UTC-3)
   PAGE_SIZE: 50,
   /* URL de la Web App de Apps Script (ver Code.gs, termina en /exec). Necesaria para crear reclamos y subir fotos. */
-  API_URL: 'https://script.google.com/macros/s/AKfycbyV-PJm86Z67czDul6rXQqAjvAY0rqZyFB2yTh0egixWxFrG8bIpjL9t3SlJQxyfyQE/exec',
+  API_URL: '',
   /* Carpeta de Drive con las imágenes (debe estar compartida: "Cualquier persona con el enlace").
      El campo Documento puede traer: enlace de Drive, ID de archivo o nombre de archivo.
      Para resolver NOMBRES de archivo hace falta una API key de Google (Drive API v3, solo lectura);
@@ -1463,7 +1463,7 @@ function ruleEvento(x,batch){
   if(batch&&batch.length>=2) return {f:isAsignado,msg:'Con varios reclamos tu rol solo permite el estado Asignado'};
   if(isEnCurso((x.r||{})['Estado'])) return {f:isAsignado,msg:'El reclamo está En curso: tu rol solo permite el estado Asignado'};
   if(isAsignado(lastEvEstado(x))) return {f:v=>!isEnCurso(v),msg:'El último evento es Asignado: podés elegir cualquier estado menos En curso'};
-  return null;
+  return {f:v=>!isEnCurso(v),msg:'Tu rol no puede elegir el estado En curso en un evento'};   // regla general de todo no-admin
 }
 function applyEstadoRule(id,rule,hintId){
   const sel=$(id), h=$(hintId);
